@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>SmartFridge Pro</title>
+<style>
+:root{
+  --bg:#060a15; --surface:#0f172a; --surface2:#1a2744;
+  --border:rgba(255,255,255,0.06); --text:#bcc8e0; --text2:#6b7d95;
+  --accent:#00e6b8; --accent2:#008cff; --warn:#ffaa32; --danger:#ff5064;
+  --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:'Inter',-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+  background:var(--bg); color:var(--text); min-height:100vh;
+  background-image:radial-gradient(ellipse at 20% 10%, rgba(0,230,184,0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(0,140,255,0.03) 0%, transparent 50%);
+}
+.app{max-width:1440px;margin:0 auto;padding:14px 20px}
+.topbar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 24px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);margin-bottom:14px;flex-wrap:wrap;gap:10px;
+}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{
+  width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;
+}
+.logo h1{font-size:19px;font-weight:700;letter-spacing:-0.4px}
+.logo span{font-size:10px;color:var(--text2);font-weight:400;margin-left:4px}
+.status-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.status-item{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
+.dot{width:8px;height:8px;border-radius:50%;transition:all .3s}
+.dot.green{background:var(--accent);box-shadow:0 0 10px rgba(0,230,184,0.3)}
+.dot.orange{background:var(--warn);box-shadow:0 0 10px rgba(255,170,50,0.3)}
+.dot.gray{background:#3a4a5c}
+.time-badge{font-size:10px;color:var(--text2);background:var(--surface2);padding:3px 8px;border-radius:5px}
+.main-grid{display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px}
+.video-card{grid-row:span 3}
+@media(max-width:1024px){.main-grid{grid-template-columns:1fr}.video-card{grid-row:span 1}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.card-head{
+  padding:12px 18px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;
+}
+.card-head .badge{font-size:10px;background:var(--surface2);padding:3px 9px;border-radius:12px;color:var(--text2)}
+.card-body{max-height:380px;overflow-y:auto}
+.card-body::-webkit-scrollbar{width:4px}
+.card-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
+.video-wrap{position:relative;aspect-ratio:4/3;background:#000;display:flex;align-items:center;justify-content:center}
+.video-wrap img{width:100%;height:100%;object-fit:contain}
+.video-overlay{position:absolute;bottom:10px;left:10px;display:flex;gap:6px}
+.video-tag{font-size:9px;padding:3px 8px;border-radius:10px;background:rgba(0,0,0,0.75);color:var(--accent)}
+.video-status{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--text2)}
+.list-item{
+  display:flex;align-items:center;padding:10px 18px;gap:10px;
+  border-bottom:1px solid rgba(255,255,255,0.03);font-size:13px;
+}
+.list-item:hover{background:rgba(255,255,255,0.02)}
+.item-icon{font-size:18px;width:28px;text-align:center;flex-shrink:0}
+.item-name{flex:1;font-weight:500}
+.item-count{padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.count-in{background:rgba(0,230,184,0.12);color:var(--accent)}
+.item-time{font-size:10px;color:var(--text2);white-space:nowrap}
+.action-put .item-icon{color:var(--accent)}
+.action-take .item-icon{color:var(--danger)}
+.action-put .item-count{background:rgba(0,230,184,0.12);color:var(--accent)}
+.action-take .item-count{background:rgba(255,80,100,0.12);color:var(--danger)}
+.item-actions{display:flex;gap:4px;margin-left:4px}
+.btn-sm{
+  width:24px;height:24px;border-radius:6px;border:1px solid var(--border);
+  background:var(--surface2);color:var(--text);cursor:pointer;
+  font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;
+}
+.btn-sm:hover{background:var(--accent);color:#000;border-color:var(--accent)}
+.btn-sm.danger:hover{background:var(--danger);border-color:var(--danger);color:#fff}
+.edit-row{
+  display:flex;gap:6px;padding:8px 18px;align-items:center;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.edit-row input{
+  flex:1;background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;
+}
+.edit-row input:focus{border-color:var(--accent)}
+.btn{
+  padding:6px 14px;border-radius:6px;border:none;cursor:pointer;
+  font-size:12px;font-weight:600;
+}
+.btn-accent{background:var(--accent);color:#000}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.empty{text-align:center;padding:40px 20px;color:var(--text2)}
+.empty .icon{font-size:32px;margin-bottom:8px;opacity:0.4}
+.footer{text-align:center;padding:12px;color:var(--text2);font-size:10px;letter-spacing:0.5px;margin-top:8px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.pulse{animation:pulse 2s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="logo"><div class="logo-icon">❄</div><div><h1>SmartFridge<span>Pro</span></h1></div></div>
+    <div class="status-row">
+      <div class="status-item"><div class="dot gray" id="doorDot"></div><b id="doorState">--</b></div>
+      <div class="status-item"><div class="dot gray" id="lightDot"></div><b id="lightState">--</b></div>
+      <div class="status-item">🌡<b id="cpuTemp">--</b>°C</div>
+      <div class="time-badge"><span id="updateTime">--</span> <span id="liveDot" style="color:var(--accent);display:none">●</span></div>
+    </div>
+  </div>
+  <div class="main-grid">
+    <div class="card video-card">
+      <div class="card-head">📹 Live View <span class="badge" id="streamStatus">Connecting...</span></div>
+      <div class="video-wrap">
+        <img id="videoImg" src="/api/snapshot" crossorigin="anonymous">
+        <div class="video-overlay"><span class="video-tag">● LIVE</span><span class="video-tag" id="fpsBadge">SNAP</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">📦 Inventory <span class="badge" id="invCount">0</span>
+        <button class="btn-sm" onclick="showAddForm()" title="Add Item">+</button>
+      </div>
+      <div class="card-body" id="invList"><div class="empty"><div class="icon">🛒</div><p>No items</p></div></div>
+      <div id="addForm" style="display:none" class="edit-row">
+        <input id="newItemName" placeholder="Item name..." maxlength="20">
+        <input id="newItemCount" type="number" value="1" min="1" max="99" style="width:50px">
+        <button class="btn btn-accent" onclick="addItem()">Add</button>
+        <button class="btn btn-outline" onclick="hideAddForm()">Cancel</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">📋 Activity <span class="badge" id="evtCount">0</span></div>
+      <div class="card-body" id="evtList"><div class="empty"><div class="icon">📝</div><p>No activity</p></div></div>
+    </div>
+  </div>
+  <div class="footer">SmartFridge Pro · Luckfox Pico Ultra W · <span id="connStatus" style="color:var(--text2)">● Initializing</span></div>
+</div>
+<script>
+const REFRESH=1200;
+let fetchCount=0,lastFetchOk=false;
+function $(id){return document.getElementById(id)}
+async function refresh(){
+  fetchCount++;let ok=false;
+  try{
+    const r=await fetch('/api/dashboard')
+    if(!r.ok)throw new Error('HTTP '+r.status)
+    const d=await r.json()
+    updateStatus(d.status);updateInventory(d.inventory);updateEvents(d.events);ok=true;
+    if(!lastFetchOk){$('connStatus').textContent='● Connected';$('connStatus').style.color='var(--accent)'}
+    $('liveDot').style.display='inline';
+    setTimeout(function(){$('liveDot').style.display='none'},200);
+  }catch(e){
+    $('connStatus').textContent='● Disconnected';$('connStatus').style.color='var(--danger)';
+    $('liveDot').style.display='none';
+  }
+  lastFetchOk=ok;
+}
+function updateStatus(s){
+  if(!s)return
+  const door=s.door_state,light=s.light_state
+  $('doorState').textContent=door==='open'?'OPEN':'CLOSED'
+  $('lightState').textContent=light==='on'?'ON':'OFF'
+  $('cpuTemp').textContent=(s.cpu_temp||0).toFixed(0)
+  $('updateTime').textContent=(s.updated||'').slice(11,19)||'--'
+  const dd=$('doorDot'),ld=$('lightDot')
+  dd.className='dot '+(door==='open'?'orange pulse':'gray')
+  ld.className='dot '+(light==='on'?'green pulse':'gray')
+  $('streamStatus').textContent=door==='open'?'● Detecting':'○ Standby'
+  $('streamStatus').style.color=door==='open'?'var(--accent)':'var(--text2)'
+}
+function updateInventory(items){
+  const el=$('invList')
+  $('invCount').textContent=(items||[]).length+' items'
+  if(!items||!items.length){el.innerHTML='<div class="empty"><div class="icon">🛒</div><p>Empty</p></div>';return}
+  const icons={'苹果':'🍎','香蕉':'🍌','橙子':'🍊','西兰花':'🥦','胡萝卜':'🥕',
+    '三明治':'🥪','披萨':'🍕','蛋糕':'🎂','瓶装饮品':'🧃','热狗':'🌭',
+    '甜甜圈':'🍩','杯子':'🥤','牛奶':'🥛','鸡蛋':'🥚','面包':'🍞','奶酪':'🧀','葡萄':'🍇','西瓜':'🍉','草莓':'🍓'};
+  el.innerHTML=items.map((i,idx)=>{
+    const icon=icons[i.name]||'📦';
+    const ts=(i.last_updated||i.first_seen||'').slice(0,16);
+    return '<div class="list-item">'+
+      '<span class="item-icon">'+icon+'</span><span class="item-name">'+i.name+'</span>'+
+      '<span class="item-count count-in">x'+i.count+'</span><span class="item-time">'+ts+'</span>'+
+      '<div class="item-actions">'+
+        '<button class="btn-sm" onclick="editItem('+idx+',1)">+</button>'+
+        '<button class="btn-sm" onclick="editItem('+idx+',-1)">-</button>'+
+        '<button class="btn-sm danger" onclick="deleteItem('+idx+')">x</button>'+
+      '</div></div>';
+  }).join('');
+}
+function updateEvents(evts){
+  const el=$('evtList')
+  $('evtCount').textContent=(evts||[]).length+' events'
+  if(!evts||!evts.length){el.innerHTML='<div class="empty"><div class="icon">📝</div><p>No activity</p></div>';return}
+  el.innerHTML=evts.map((e,idx)=>{
+    const isIn=e.action==='put_in',icon=isIn?'📥':'📤';
+    return '<div class="list-item '+(isIn?'action-put':'action-take')+'">'+
+      '<span class="item-icon">'+icon+'</span><span class="item-name">'+(e.food_name||e.name)+'</span>'+
+      '<span class="item-count '+(isIn?'count-in':'count-out')+'">'+(isIn?'+':'-')+e.count+'</span>'+
+      '<span class="item-time">'+(e.timestamp||'').slice(0,16)+'</span>'+
+      '<div class="item-actions">'+
+        '<button class="btn-sm danger" onclick="deleteEvent('+idx+')" title="Delete event">x</button>'+
+      '</div></div>';
+  }).join('')
+}
+function showAddForm(){$('addForm').style.display='flex';$('newItemName').focus()}
+function hideAddForm(){$('addForm').style.display='none';$('newItemName').value=''}
+async function addItem(){
+  const name=$('newItemName').value.trim(),count=parseInt($('newItemCount').value)||1;
+  if(!name)return;
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'add',name:name,count:count})});
+  hideAddForm();refresh();
+}
+async function editItem(idx,delta){
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'adjust',index:idx,delta:delta})});
+  refresh();
+}
+async function deleteItem(idx){
+  if(!confirm('Delete this item?'))return;
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',index:idx})});
+  refresh();
+}
+async function deleteEvent(idx){
+  if(!confirm('Delete this event?'))return;
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete_event',index:idx})});
+  refresh();
+}
+// Video snapshot polling (more reliable than MJPEG)
+(function pollSnap(){
+  $('videoImg').src='/api/snapshot?_='+Date.now();
+  setTimeout(pollSnap,150);
+})();
+refresh();setInterval(refresh,REFRESH)
+</script>
+</body>
+</html>

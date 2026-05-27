@@ -1,0 +1,7 @@
+/mnt/c/claude_code_demo/board/fridge_ai/build/CMakeFiles/fridge_ai.dir
+/mnt/c/claude_code_demo/board/fridge_ai/build/CMakeFiles/edit_cache.dir
+/mnt/c/claude_code_demo/board/fridge_ai/build/CMakeFiles/rebuild_cache.dir
+/mnt/c/claude_code_demo/board/fridge_ai/build/CMakeFiles/list_install_components.dir
+/mnt/c/claude_code_demo/board/fridge_ai/build/CMakeFiles/install.dir
+/mnt/c/claude_code_demo/board/fridge_ai/build/CMakeFiles/install/local.dir
+/mnt/c/claude_code_demo/board/fridge_ai/build/CMakeFiles/install/strip.dir
