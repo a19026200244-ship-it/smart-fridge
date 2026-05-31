@@ -70,6 +70,16 @@ body{
 .action-put .item-count{background:rgba(0,230,184,0.12);color:var(--accent)}
 .action-take .item-count{background:rgba(255,80,100,0.12);color:var(--danger)}
 .item-actions{display:flex;gap:4px;margin-left:4px}
+.evt-badge{
+  font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600;margin:0 3px;flex-shrink:0
+}
+.evt-badge.review{background:rgba(255,170,50,0.15);color:var(--warn)}
+.evt-badge.confirmed{background:rgba(0,230,184,0.12);color:var(--accent)}
+.evt-badge.rejected{background:rgba(255,80,100,0.12);color:var(--danger)}
+.cat-badge{
+  font-size:9px;padding:2px 6px;border-radius:8px;font-weight:500;
+  background:rgba(0,140,255,0.12);color:var(--accent2);margin:0 2px;flex-shrink:0
+}
 .btn-sm{
   width:24px;height:24px;border-radius:6px;border:1px solid var(--border);
   background:var(--surface2);color:var(--text);cursor:pointer;
@@ -181,9 +191,16 @@ function updateInventory(items){
   el.innerHTML=items.map((i,idx)=>{
     const icon=icons[i.name]||'📦';
     const ts=(i.last_updated||i.first_seen||'').slice(0,16);
+    const qt=i.qty_type||'count';
+    const qtypeBadge=qt==='approx'?'<span class="evt-badge review" style="font-size:8px;padding:1px 5px">≈</span>':
+                     qt==='packed'?'<span class="evt-badge review" style="font-size:8px;padding:1px 5px">□</span>':'';
+    const qest=(i.qty_estimate&&qt!=='count')?'<span style="font-size:9px;color:var(--warn)">'+i.qty_estimate+'</span>':'';
+    const countDisplay=(qt==='count')?('x'+i.count):('<span style="color:var(--warn)">'+i.qty_estimate+'</span>');
     return '<div class="list-item">'+
       '<span class="item-icon">'+icon+'</span><span class="item-name">'+i.name+'</span>'+
-      '<span class="item-count count-in">x'+i.count+'</span><span class="item-time">'+ts+'</span>'+
+      qtypeBadge+
+      '<span class="item-count count-in">'+countDisplay+'</span>'+
+      '<span class="item-time">'+ts+'</span>'+
       '<div class="item-actions">'+
         '<button class="btn-sm" onclick="editItem('+idx+',1)">+</button>'+
         '<button class="btn-sm" onclick="editItem('+idx+',-1)">-</button>'+
@@ -196,14 +213,31 @@ function updateEvents(evts){
   $('evtCount').textContent=(evts||[]).length+' events'
   if(!evts||!evts.length){el.innerHTML='<div class="empty"><div class="icon">📝</div><p>No activity</p></div>';return}
   el.innerHTML=evts.map((e,idx)=>{
-    const isIn=e.action==='put_in',icon=isIn?'📥':'📤';
+    const isIn=e.action==='put_in',icon=isIn?'📥':'📤'
+    const status=e.review_status||'confirmed'
+    const badge=(status==='needs_review')?'<span class="evt-badge review">待审核</span>':
+                 (status==='rejected')?'<span class="evt-badge rejected">已驳回</span>':
+                 (status==='confirmed')?'<span class="evt-badge confirmed">已确认</span>':''
+    const catBadge=(e.category)?
+    '<span class="cat-badge">'+e.category+'</span>':'';
+    const qt=e.qty_type||'count'
+    const qtypeIcon=(qt==='approx')?'≈':(qt==='packed')?'□':''
+    const qtypeLabel=qtypeIcon?('<span class="cat-badge" style="font-size:8px;padding:1px 4px">'+qtypeIcon+'</span>'):''
+    const qest=(e.qty_estimate&&qt!=='count')?
+      ('<span style="font-size:9px;color:var(--warn);margin-left:2px">'+e.qty_estimate+'</span>'):''
+    const countLabel=(qt==='count')?(isIn?'+':'-')+e.count:(isIn?'+有变化':'-有变化')
+    const actions=(status==='needs_review')?
+      '<button class="btn-sm" onclick="confirmEvent('+idx+')" title="确认">✓</button>'+
+      '<button class="btn-sm danger" onclick="rejectEvent('+idx+')" title="驳回">✗</button>'+
+      '<button class="btn-sm danger" onclick="deleteEvent('+idx+')" title="删除">x</button>':
+      '<button class="btn-sm danger" onclick="deleteEvent('+idx+')" title="删除">x</button>'
     return '<div class="list-item '+(isIn?'action-put':'action-take')+'">'+
       '<span class="item-icon">'+icon+'</span><span class="item-name">'+(e.food_name||e.name)+'</span>'+
-      '<span class="item-count '+(isIn?'count-in':'count-out')+'">'+(isIn?'+':'-')+e.count+'</span>'+
+      qtypeLabel+
+      '<span class="item-count '+(isIn?'count-in':'count-out')+'">'+countLabel+'</span>'+
+      badge+catBadge+qest+
       '<span class="item-time">'+(e.timestamp||'').slice(0,16)+'</span>'+
-      '<div class="item-actions">'+
-        '<button class="btn-sm danger" onclick="deleteEvent('+idx+')" title="Delete event">x</button>'+
-      '</div></div>';
+      '<div class="item-actions">'+actions+'</div></div>';
   }).join('')
 }
 function showAddForm(){$('addForm').style.display='flex';$('newItemName').focus()}
@@ -226,6 +260,14 @@ async function deleteItem(idx){
 async function deleteEvent(idx){
   if(!confirm('Delete this event?'))return;
   await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete_event',index:idx})});
+  refresh();
+}
+async function confirmEvent(idx){
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'confirm_event',index:idx})});
+  refresh();
+}
+async function rejectEvent(idx){
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reject_event',index:idx})});
   refresh();
 }
 // Video snapshot polling (more reliable than MJPEG)
