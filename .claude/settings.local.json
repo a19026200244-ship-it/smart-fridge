@@ -94,7 +94,8 @@
       "Bash(taskkill //F //PID 21616)",
       "Bash(ls -la \"//wsl$/Ubuntu-22.04/home/taki/luckfox_pico_rkmpi_example/example/luckfox_pico_rtsp_yolov5/src/\" 2>&1)",
       "Read(///wsl$/Ubuntu-22.04/home/taki/luckfox_pico_rkmpi_example/example/luckfox_pico_rtsp_yolov5/**)",
-      "Bash(make -j4)"
+      "Bash(make -j4)",
+      "Bash(python3 test/test_partial_remove.py)"
     ],
     "additionalDirectories": [
       "\\tmp",

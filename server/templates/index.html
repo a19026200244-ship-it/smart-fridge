@@ -152,6 +152,19 @@ body{
 const REFRESH=1200;
 let fetchCount=0,lastFetchOk=false;
 function $(id){return document.getElementById(id)}
+const QTY_LABELS={
+  full:'几乎满',three_quarters:'约3/4',half:'约一半',low:'少量',
+  empty:'几乎空',unknown:'无法判断',needs_manual:'需人工确认',
+  put_in:'有新增',take_out:'有取出'
+};
+function qtyLabel(v){return QTY_LABELS[v]||v||'--'}
+function qtyTypeBadge(qt){
+  if(qt==='liquid_level')return '<span class="evt-badge confirmed" style="font-size:8px;padding:1px 5px">液位</span>';
+  if(qt==='approx')return '<span class="evt-badge review" style="font-size:8px;padding:1px 5px">≈</span>';
+  if(qt==='packed')return '<span class="evt-badge review" style="font-size:8px;padding:1px 5px">包装</span>';
+  return '';
+}
+function eventId(e,idx){return e&&e.id!==undefined?e.id:idx}
 async function refresh(){
   fetchCount++;let ok=false;
   try{
@@ -268,6 +281,90 @@ async function confirmEvent(idx){
 }
 async function rejectEvent(idx){
   await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reject_event',index:idx})});
+  refresh();
+}
+// Partial-takeout aware renderers. They intentionally override the older
+// functions above while keeping the rest of the page unchanged.
+function updateInventory(items){
+  const el=$('invList')
+  $('invCount').textContent=(items||[]).length+' items'
+  if(!items||!items.length){el.innerHTML='<div class="empty"><div class="icon">ðŸ›’</div><p>Empty</p></div>';return}
+  const icons={'苹果':'ðŸŽ','香蕉':'ðŸŒ','橙子':'ðŸŠ','西兰花':'ðŸ¥¦','胡萝卜':'ðŸ¥•',
+    '三明治':'ðŸ¥ª','披萨':'ðŸ•','蛋糕':'ðŸŽ‚','瓶装饮品':'ðŸ§ƒ','热狗':'ðŸŒ­',
+    '甜甜圈':'ðŸ©','杯子':'ðŸ¥¤','牛奶':'ðŸ¥›','鸡蛋':'ðŸ¥š','面包':'ðŸž','奶酪':'ðŸ§€'};
+  el.innerHTML=items.map((i,idx)=>{
+    const icon=icons[i.name]||'ðŸ“¦'
+    const ts=(i.last_updated||i.first_seen||'').slice(0,16)
+    const qt=i.qty_type||'count'
+    const countDisplay=(qt==='count')?('x'+i.count):qtyLabel(i.qty_estimate)
+    const state=(qt==='count')?'':'<span style="font-size:9px;color:var(--warn);margin-left:4px">'+qtyLabel(i.qty_estimate)+'</span>'
+    return '<div class="list-item">'+
+      '<span class="item-icon">'+icon+'</span><span class="item-name">'+i.name+'</span>'+
+      qtyTypeBadge(qt)+state+
+      '<span class="item-count count-in">'+countDisplay+'</span>'+
+      '<span class="item-time">'+ts+'</span>'+
+      '<div class="item-actions">'+
+        '<button class="btn-sm" onclick="editItem('+idx+',1)">+</button>'+
+        '<button class="btn-sm" onclick="editItem('+idx+',-1)">-</button>'+
+        '<button class="btn-sm danger" onclick="deleteItem('+idx+')">x</button>'+
+      '</div></div>'
+  }).join('')
+}
+function updateEvents(evts){
+  const el=$('evtList')
+  $('evtCount').textContent=(evts||[]).length+' events'
+  if(!evts||!evts.length){el.innerHTML='<div class="empty"><div class="icon">ðŸ“</div><p>No activity</p></div>';return}
+  el.innerHTML=evts.map((e,idx)=>{
+    const isPartial=e.action==='partial_take_out'
+    const isIn=e.action==='put_in'
+    const icon=isIn?'ðŸ“¥':(isPartial?'ðŸ¥¤':'ðŸ“¤')
+    const status=e.review_status||'confirmed'
+    const badge=(status==='needs_review')?'<span class="evt-badge review">待审核</span>':
+      (status==='rejected')?'<span class="evt-badge rejected">已驳回</span>':
+      (status==='corrected')?'<span class="evt-badge confirmed">已修正</span>':
+      (status==='confirmed')?'<span class="evt-badge confirmed">已确认</span>':''
+    const catBadge=e.category?'<span class="cat-badge">'+e.category+'</span>':''
+    const qt=e.qty_type||'count'
+    const levelChange=(e.before_qty_estimate||e.after_qty_estimate)?
+      '<span style="font-size:9px;color:var(--warn);margin-left:2px">'+qtyLabel(e.before_qty_estimate)+' -> '+qtyLabel(e.after_qty_estimate)+'</span>':''
+    const qest=(e.qty_estimate&&qt!=='count')?
+      '<span style="font-size:9px;color:var(--warn);margin-left:2px">'+qtyLabel(e.qty_estimate)+'</span>':''
+    const countLabel=isPartial?'部分取出':((qt==='count')?(isIn?'+':'-')+e.count:(isIn?'+有变化':'-有变化'))
+    const eid=eventId(e,idx)
+    const partialFix=(status==='needs_review'&&isPartial)?
+      '<button class="btn-sm" onclick="correctPartialEvent('+eid+',\'half\')" title="修正为半瓶">1/2</button>'+
+      '<button class="btn-sm" onclick="correctPartialEvent('+eid+',\'low\')" title="修正为少量">L</button>'+
+      '<button class="btn-sm" onclick="correctPartialEvent('+eid+',\'empty\')" title="修正为空">0</button>':''
+    const actions=(status==='needs_review')?
+      partialFix+
+      '<button class="btn-sm" onclick="confirmEvent('+eid+')" title="确认">✓</button>'+
+      '<button class="btn-sm danger" onclick="rejectEvent('+eid+')" title="驳回">×</button>'+
+      '<button class="btn-sm danger" onclick="deleteEvent('+eid+')" title="删除">x</button>':
+      '<button class="btn-sm danger" onclick="deleteEvent('+eid+')" title="删除">x</button>'
+    return '<div class="list-item '+(isIn?'action-put':'action-take')+'">'+
+      '<span class="item-icon">'+icon+'</span><span class="item-name">'+(e.food_name||e.name)+'</span>'+
+      qtyTypeBadge(qt)+
+      '<span class="item-count '+(isIn?'count-in':'count-out')+'">'+countLabel+'</span>'+
+      badge+catBadge+qest+levelChange+
+      '<span class="item-time">'+(e.timestamp||'').slice(0,16)+'</span>'+
+      '<div class="item-actions">'+actions+'</div></div>'
+  }).join('')
+}
+async function deleteEvent(event_id){
+  if(!confirm('Delete this event?'))return;
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete_event',event_id:event_id})});
+  refresh();
+}
+async function confirmEvent(event_id){
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'confirm_event',event_id:event_id})});
+  refresh();
+}
+async function rejectEvent(event_id){
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reject_event',event_id:event_id})});
+  refresh();
+}
+async function correctPartialEvent(event_id,qty_estimate){
+  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'correct_partial_event',event_id:event_id,qty_estimate:qty_estimate})});
   refresh();
 }
 // Video snapshot polling (more reliable than MJPEG)

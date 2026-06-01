@@ -66,7 +66,8 @@ def init_db():
             action TEXT, food_name TEXT, count INTEGER DEFAULT 1,
             review_status TEXT, confidence REAL,
             category TEXT, category_l2 TEXT, item_key TEXT,
-            qty_type TEXT, qty_estimate TEXT)""")
+            qty_type TEXT, qty_estimate TEXT,
+            before_qty_estimate TEXT, after_qty_estimate TEXT, reason TEXT)""")
         db.execute("""CREATE TABLE IF NOT EXISTS status(
             id INTEGER PRIMARY KEY CHECK(id=1), door_state TEXT DEFAULT 'closed',
             light_state TEXT DEFAULT 'off', cpu_temp REAL DEFAULT 0,
@@ -75,7 +76,9 @@ def init_db():
         # 迁移旧表结构（向后兼容，已有的表不会自动加列）
         for col, typ in [("review_status","TEXT"),("confidence","REAL"),
                           ("category","TEXT"),("category_l2","TEXT"),("item_key","TEXT"),
-                          ("qty_type","TEXT"),("qty_estimate","TEXT")]:
+                          ("qty_type","TEXT"),("qty_estimate","TEXT"),
+                          ("before_qty_estimate","TEXT"),("after_qty_estimate","TEXT"),
+                          ("reason","TEXT")]:
             try: db.execute(f"ALTER TABLE events ADD COLUMN {col} {typ}")
             except: pass
         try: db.execute("ALTER TABLE inventory ADD COLUMN category_l2 TEXT")
@@ -147,6 +150,16 @@ def edit():
         data = request.get_json()
         action = data.get("action", "")
         with get_db() as db:
+            def event_from_request():
+                event_id = data.get("event_id", None)
+                if event_id is not None:
+                    return db.execute("SELECT * FROM events WHERE id=?", (event_id,)).fetchone()
+                evts = db.execute("SELECT * FROM events ORDER BY id DESC").fetchall()
+                idx = data.get("index", -1)
+                if 0 <= idx < len(evts):
+                    return evts[idx]
+                return None
+
             if action == "add":
                 db.execute("INSERT INTO inventory(name,count,first_seen,last_updated) VALUES(?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
                     (data.get("name",""), data.get("count",1)))
@@ -166,27 +179,55 @@ def edit():
                 if 0 <= idx < len(items):
                     db.execute("DELETE FROM inventory WHERE id=?", (items[idx]["id"],))
             elif action == "delete_event":
-                evts = db.execute("SELECT * FROM events ORDER BY id DESC").fetchall()
-                idx = data.get("index", -1)
-                if 0 <= idx < len(evts):
-                    db.execute("DELETE FROM events WHERE id=?", (evts[idx]["id"],))
+                e = event_from_request()
+                if e:
+                    db.execute("DELETE FROM events WHERE id=?", (e["id"],))
             elif action == "confirm_event":
                 # 确认待审核事件 → 更新库存 + 标记为 confirmed
-                evts = db.execute("SELECT * FROM events ORDER BY id DESC").fetchall()
-                idx = data.get("index", -1)
-                if 0 <= idx < len(evts):
-                    e = dict(evts[idx])
+                row = event_from_request()
+                if row:
+                    e = dict(row)
                     if e.get("review_status") == "needs_review":
-                        delta = e["count"] if e["action"] == "put_in" else -e["count"]
-                        db.execute("UPDATE inventory SET count=count+?, last_updated=CURRENT_TIMESTAMP WHERE name=?",
-                            (abs(delta), e["food_name"]))
+                        if e["action"] == "partial_take_out":
+                            db.execute(
+                                "UPDATE inventory SET qty_type=?, qty_estimate=?, last_updated=CURRENT_TIMESTAMP WHERE name=?",
+                                (e.get("qty_type") or "liquid_level",
+                                 e.get("after_qty_estimate") or e.get("qty_estimate") or "unknown",
+                                 e["food_name"])
+                            )
+                        else:
+                            delta = e["count"] if e["action"] == "put_in" else -e["count"]
+                            db.execute("UPDATE inventory SET count=count+?, last_updated=CURRENT_TIMESTAMP WHERE name=?",
+                                (delta, e["food_name"]))
+                            db.execute("DELETE FROM inventory WHERE name=? AND count<=0", (e["food_name"],))
                         db.execute("UPDATE events SET review_status='confirmed' WHERE id=?", (e["id"],))
             elif action == "reject_event":
                 # 驳回待审核事件 → 标记为 rejected，不改库存
-                evts = db.execute("SELECT * FROM events ORDER BY id DESC").fetchall()
-                idx = data.get("index", -1)
-                if 0 <= idx < len(evts):
-                    db.execute("UPDATE events SET review_status='rejected' WHERE id=?", (evts[idx]["id"],))
+                e = event_from_request()
+                if e:
+                    db.execute("UPDATE events SET review_status='rejected' WHERE id=?", (e["id"],))
+            elif action == "correct_partial_event":
+                # 用户手动修正部分取出事件：不改 count，只修正剩余状态
+                new_qty_estimate = data.get("qty_estimate", "unknown")
+                row = event_from_request()
+                if row:
+                    e = dict(row)
+                    qty_type = e.get("qty_type") or "liquid_level"
+                    item = db.execute("SELECT id FROM inventory WHERE name=?", (e["food_name"],)).fetchone()
+                    if item:
+                        db.execute(
+                            "UPDATE inventory SET qty_type=?, qty_estimate=?, last_updated=CURRENT_TIMESTAMP WHERE id=?",
+                            (qty_type, new_qty_estimate, item["id"])
+                        )
+                    else:
+                        db.execute(
+                            "INSERT INTO inventory(name,count,qty_type,qty_estimate,first_seen,last_updated) VALUES(?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
+                            (e["food_name"], e.get("count") or 1, qty_type, new_qty_estimate)
+                        )
+                    db.execute(
+                        "UPDATE events SET review_status='corrected', qty_estimate=?, after_qty_estimate=?, reason=? WHERE id=?",
+                        (new_qty_estimate, new_qty_estimate, "用户手动修正部分取出状态", e["id"])
+                    )
             elif action == "correct_qty":
                 # 用户手动修正库存的数量类型和近似等级
                 idx = data.get("index", -1)
@@ -225,12 +266,14 @@ def sync():
                 db.execute("DELETE FROM events")
                 for e in data["events"]:
                     db.execute(
-                        "INSERT INTO events(id,timestamp,action,food_name,count,review_status,confidence,category,category_l2,item_key,qty_type,qty_estimate) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO events(id,timestamp,action,food_name,count,review_status,confidence,category,category_l2,item_key,qty_type,qty_estimate,before_qty_estimate,after_qty_estimate,reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (e.get("id",0), e.get("timestamp",datetime.now()), e.get("action",""),
                          e.get("food_name",""), e.get("count",1),
                          e.get("review_status"), e.get("confidence"),
                          e.get("category",""), e.get("category_l2",""), e.get("item_key",""),
-                         e.get("qty_type",""), e.get("qty_estimate","")))
+                         e.get("qty_type",""), e.get("qty_estimate",""),
+                         e.get("before_qty_estimate",""), e.get("after_qty_estimate",""),
+                         e.get("reason","")))
             hw = data.get("hardware_status") or data.get("status") or {}
             if hw:
                 db.execute("UPDATE status SET door_state=?,light_state=?,cpu_temp=?,updated=CURRENT_TIMESTAMP WHERE id=1",

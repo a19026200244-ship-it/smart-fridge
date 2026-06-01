@@ -133,7 +133,7 @@ tail -f /root/smartfridge/logs/mgr.log
 部署前请根据实际 PC 地址修改 `deploy/fridge_mgr.py` 中的：
 
 ```python
-SERVER_URL = "http://192.168.2.75:5000"
+SERVER_URL = "http://192.168.2.73:5000"
 ```
 
 ## 常用调试命令
@@ -171,8 +171,82 @@ rm -f /tmp/fb_lock
 | 查看接手背景        | `docs/AI二次开发文档.md`                                      |
 | 查看完整部署教程      | `docs/小白开发技术文档.md`                                      |
 
+## 配置文件说明
 
-## 已知限制
+项目支持通过 JSON 配置文件管理所有硬编码参数，兼容向后加载（无配置文件时使用内置默认值）。
+
+### 配置文件位置
+
+```
+smartfridge/
+├── config/
+│   ├── board.json    # 开发板端配置（GPIO/路径/同步/UI）
+│   └── server.json   # 服务端配置（RTSP/数据库/监听）
+```
+
+### 开发板端配置 (config/board.json)
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `hardware.door_pin` | 门磁GPIO编号 | `32` |
+| `hardware.relay_pin` | 继电器GPIO编号 | `40` |
+| `paths.data_file` | 本地数据文件路径 | `/root/smartfridge/fridge_data.json` |
+| `paths.ai_binary` | AI二进制文件路径 | `/root/smartfridge/bin/fridge_ai` |
+| `paths.ai_model` | RKNN模型文件路径 | `/root/smartfridge/model/yolov5.rknn` |
+| `paths.det_file` | AI检测结果临时文件 | `/tmp/fridge_detections.json` |
+| `paths.fb_lock` | LCD互斥锁文件 | `/tmp/fb_lock` |
+| `paths.log_dir` | 日志目录 | `/root/smartfridge/logs` |
+| `sync.server_url` | 服务端同步地址 | `http://192.168.2.73:5000` |
+| `sync.interval_seconds` | 同步间隔（秒） | `2` |
+| `ui.*` | LCD配色和食材名称 | 见下文 |
+
+### 服务端配置 (config/server.json)
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `database.path` | SQLite数据库路径 | `server/server_fridge.db` |
+| `video.rtsp_url` | 开发板RTSP流地址 | `rtsp://192.168.2.77/live/0` |
+| `video.ffmpeg_path` | ffmpeg路径（空则自动探测） | `""` |
+| `server.host` | 监听地址 | `0.0.0.0` |
+| `server.port` | 监听端口 | `5000` |
+| `tunnel.ngrok_token` | ngrok认证令牌 | `""` |
+
+### LCD UI 配色配置 (board.json → ui.*)
+
+颜色值为 RGB 三元组列表，例如 `"color_green": [0, 255, 150]`。
+
+| 字段 | 说明 |
+|------|------|
+| `ui.color_black / white / green / blue / red / yellow / gray / dgray / lgray` | UI各区域颜色 |
+| `ui.screen_size` | 屏幕分辨率 `[宽, 高]` |
+| `ui.fb_device` | framebuffer设备路径 |
+| `ui.font_path` | 字体文件路径 |
+| `ui.food_names` | 食材选择列表 |
+
+### 启动日志示例
+
+配置加载成功时程序会输出关键配置项：
+
+```
+===== SmartFridge v6.0 =====
+[Config] Loaded from /root/smartfridge/../config/board.json
+  hardware: door=32 relay=40
+  paths: data=/root/smartfridge/fridge_data.json
+  sync: server=http://192.168.2.73:5000 interval=2s
+[Init] GPIO OK
+```
+
+```
+SmartFridge Server started!
+[Config] Loaded from .../smartfridge/config/server.json
+  database: .../smartfridge/server/server_fridge.db
+  video: rtsp=rtsp://192.168.2.77/live/0 ffmpeg=(auto)
+  server: 0.0.0.0:5000
+  Local:   http://127.0.0.1:5000
+  Network: http://192.168.2.75:5000
+```
+
+### 已知限制
 
 - 当前 YOLOv5 使用 COCO 预训练类别，对冰箱真实食材、包装袋、调味瓶等场景识别精度有限，后续建议采集自定义数据集重新训练。
 - 事件检测基于“开门前后检测结果差异”，一次开门过程中的多次中间操作会被合并为净变化。

@@ -3,20 +3,35 @@
 import os, json, time, glob, struct, select
 from PIL import Image, ImageDraw, ImageFont
 
-FB_DEV = "/dev/fb0"
-W, H = 480, 480
-FONT_PATH = "/oem/usr/share/simsun_en.ttf"
+# ── 配置文件加载 (支持向后兼容) ──
+_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../config/board.json")
+_ui_cfg = {}
+try:
+    with open(_CONFIG_PATH) as f:
+        _ui_cfg = json.load(f).get("ui", {})
+except Exception:
+    pass
+
+def _cfg(key, default):
+    v = _ui_cfg.get(key)
+    if v is None: return default
+    if isinstance(default, tuple) and isinstance(v, list): return tuple(v)
+    return v
+
+FB_DEV   = _cfg("fb_device", "/dev/fb0")
+W, H     = _cfg("screen_size", (480, 480))
+FONT_PATH = _cfg("font_path", "/oem/usr/share/simsun_en.ttf")
 
 # 纯色配色 - 最高对比度
-BLACK   = (0, 0, 0)
-WHITE   = (255, 255, 255)
-GREEN   = (0, 255, 150)
-BLUE    = (60, 160, 255)
-RED     = (255, 60, 80)
-YELLOW  = (255, 210, 40)
-GRAY    = (140, 140, 150)
-DGRAY   = (40, 40, 50)
-LGRAY   = (25, 25, 35)
+BLACK   = _cfg("color_black",   (0, 0, 0))
+WHITE   = _cfg("color_white",   (255, 255, 255))
+GREEN   = _cfg("color_green",   (0, 255, 150))
+BLUE    = _cfg("color_blue",    (60, 160, 255))
+RED     = _cfg("color_red",     (255, 60, 80))
+YELLOW  = _cfg("color_yellow",  (255, 210, 40))
+GRAY    = _cfg("color_gray",    (140, 140, 150))
+DGRAY   = _cfg("color_dgray",   (40, 40, 50))
+LGRAY   = _cfg("color_lgray",   (25, 25, 35))
 
 _touch_fd = None
 _touch_zones = []
@@ -25,11 +40,30 @@ _touch_y = 0
 _touch_active = False
 _touch_dialog = None
 
-ICONS = {"苹果":"#","香蕉":"#","橙子":"#","西兰花":"#","胡萝卜":"#",
-         "三明治":"#","披萨":"#","蛋糕":"#","瓶装饮品":"#","热狗":"#",
-         "甜甜圈":"#","杯子":"#","牛奶":"#","鸡蛋":"#","面包":"#","奶酪":"#"}
-FOOD_NAMES = ["苹果","香蕉","橙子","西兰花","胡萝卜","三明治","披萨","蛋糕",
-              "瓶装饮品","热狗","甜甜圈","杯子","牛奶","鸡蛋","面包","奶酪"]
+FOOD_NAMES = _ui_cfg.get("food_names", [
+    "苹果","香蕉","橙子","西兰花","胡萝卜","三明治","披萨","蛋糕",
+    "瓶装饮品","热狗","甜甜圈","杯子","牛奶","鸡蛋","面包","奶酪"
+])
+
+# 分层识别: display_name → COCO key → {category, icon}
+_DISPLAY_TO_COCO = {}
+_COCO_TO_ICON = {}
+try:
+    with open(_CONFIG_PATH) as f:
+        _full_cfg = json.load(f)
+    _dm = _full_cfg.get("display_name_map", {})
+    _cm = _full_cfg.get("category_map", {})
+    _ci = _full_cfg.get("category_icons", {})
+    for coco, cn in _dm.items():
+        _DISPLAY_TO_COCO[cn] = coco
+    for coco, info in _cm.items():
+        _COCO_TO_ICON[coco] = info.get("icon") or _ci.get(info.get("c1"), "❓")
+except Exception:
+    pass
+
+def _item_icon(name):
+    coco = _DISPLAY_TO_COCO.get(name, "")
+    return _COCO_TO_ICON.get(coco, "📦")
 
 def find_touch_device():
     for dev in glob.glob("/dev/input/event*"):
@@ -96,8 +130,9 @@ def draw_lcd(data, touch_dev=None):
             # 交替行背景
             if idx%2==0: d.rectangle([(6,y),(W-6,y+48)], fill=(18,18,28))
             else: d.rectangle([(6,y),(W-6,y+48)], fill=BLACK)
-            # 行号 + 名称
-            d.text((14,y+8), f"[{idx+1}]", fill=GRAY, font=get_font(16))
+            # 图标 + 名称
+            icon = _item_icon(name)
+            d.text((14,y+8), icon, fill=WHITE, font=get_font(18))
             d.text((50,y+10), name, fill=WHITE, font=get_font(22))
             # 数量
             cnt_s = f"x{cnt}"

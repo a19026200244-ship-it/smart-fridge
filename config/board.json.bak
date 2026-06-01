@@ -1,0 +1,329 @@
+{
+    "hardware": {
+        "door_pin": 32,
+        "relay_pin": 40
+    },
+    "paths": {
+        "data_file": "/root/smartfridge/fridge_data.json",
+        "ai_binary": "/root/smartfridge/bin/fridge_ai",
+        "ai_model": "/root/smartfridge/model/yolov5.rknn",
+        "det_file": "/tmp/fridge_detections.json",
+        "fb_lock": "/tmp/fb_lock",
+        "log_dir": "/root/smartfridge/logs"
+    },
+    "sync": {
+        "server_url": "http://192.168.2.73:5000",
+        "interval_seconds": 2
+    },
+    "ui": {
+        "fb_device": "/dev/fb0",
+        "screen_size": [
+            480,
+            480
+        ],
+        "font_path": "/oem/usr/share/simsun_en.ttf",
+        "color_black": [
+            0,
+            0,
+            0
+        ],
+        "color_white": [
+            255,
+            255,
+            255
+        ],
+        "color_green": [
+            0,
+            255,
+            150
+        ],
+        "color_blue": [
+            60,
+            160,
+            255
+        ],
+        "color_red": [
+            255,
+            60,
+            80
+        ],
+        "color_yellow": [
+            255,
+            210,
+            40
+        ],
+        "color_gray": [
+            140,
+            140,
+            150
+        ],
+        "color_dgray": [
+            40,
+            40,
+            50
+        ],
+        "color_lgray": [
+            25,
+            25,
+            35
+        ],
+        "food_names": [
+            "\u82f9\u679c",
+            "\u9999\u8549",
+            "\u6a59\u5b50",
+            "\u897f\u5170\u82b1",
+            "\u80e1\u841d\u535c",
+            "\u4e09\u660e\u6cbb",
+            "\u62ab\u8428",
+            "\u86cb\u7cd5",
+            "\u74f6\u88c5\u996e\u54c1",
+            "\u70ed\u72d7",
+            "\u751c\u751c\u5708",
+            "\u676f\u5b50",
+            "\u725b\u5976",
+            "\u9e21\u86cb",
+            "\u9762\u5305",
+            "\u5976\u916a"
+        ]
+    },
+    "event": {
+        "auto_confirm_threshold": 2,
+        "needs_review_threshold": 1,
+        "enable_review": true
+    },
+    "liquid_level": {
+        "enabled": true,
+        "supported_items": [
+            "bottle"
+        ],
+        "min_confidence": 0.65,
+        "min_level_delta": 1,
+        "levels": [
+            {
+                "name": "full",
+                "min_ratio": 0.8
+            },
+            {
+                "name": "three_quarters",
+                "min_ratio": 0.6
+            },
+            {
+                "name": "half",
+                "min_ratio": 0.35
+            },
+            {
+                "name": "low",
+                "min_ratio": 0.1
+            },
+            {
+                "name": "empty",
+                "min_ratio": 0.0
+            }
+        ]
+    },
+    "category_map": {
+        "apple": {
+            "c1": "\u679c\u852c",
+            "c2": "\u6c34\u679c",
+            "icon": "\ud83c\udf4e"
+        },
+        "banana": {
+            "c1": "\u679c\u852c",
+            "c2": "\u6c34\u679c",
+            "icon": "\ud83c\udf4c"
+        },
+        "orange": {
+            "c1": "\u679c\u852c",
+            "c2": "\u6c34\u679c",
+            "icon": "\ud83c\udf4a"
+        },
+        "broccoli": {
+            "c1": "\u679c\u852c",
+            "c2": "\u852c\u83dc",
+            "icon": "\ud83e\udd66"
+        },
+        "carrot": {
+            "c1": "\u679c\u852c",
+            "c2": "\u852c\u83dc",
+            "icon": "\ud83e\udd55"
+        },
+        "hot dog": {
+            "c1": "\u5373\u98df",
+            "c2": "\u719f\u98df",
+            "icon": "\ud83c\udf2d"
+        },
+        "donut": {
+            "c1": "\u5373\u98df",
+            "c2": "\u751c\u70b9",
+            "icon": "\ud83c\udf69"
+        },
+        "pizza": {
+            "c1": "\u5373\u98df",
+            "c2": "\u5207\u7247",
+            "icon": "\ud83c\udf55"
+        },
+        "cake": {
+            "c1": "\u5373\u98df",
+            "c2": "\u751c\u70b9",
+            "icon": "\ud83c\udf82"
+        },
+        "sandwich": {
+            "c1": "\u5373\u98df",
+            "c2": "\u5207\u7247",
+            "icon": "\ud83e\udd6a"
+        },
+        "bottle": {
+            "c1": "\u4e73\u54c1\u996e\u6599",
+            "c2": "\u5305\u88c5\u996e\u54c1",
+            "icon": "\ud83e\uddc3"
+        },
+        "cup": {
+            "c1": "\u4e73\u54c1\u996e\u6599",
+            "c2": "\u5bb9\u5668",
+            "icon": "\ud83e\udd64"
+        },
+        "milk": {
+            "c1": "\u4e73\u54c1\u996e\u6599",
+            "c2": "\u4e73\u5236\u54c1",
+            "icon": "\ud83e\udd5b"
+        },
+        "egg": {
+            "c1": "\u4e73\u54c1\u996e\u6599",
+            "c2": "\u86cb\u5236\u54c1",
+            "icon": "\ud83e\udd5a"
+        },
+        "bread": {
+            "c1": "\u4e73\u54c1\u996e\u6599",
+            "c2": "\u70d8\u7119",
+            "icon": "\ud83c\udf5e"
+        },
+        "cheese": {
+            "c1": "\u4e73\u54c1\u996e\u6599",
+            "c2": "\u4e73\u5236\u54c1",
+            "icon": "\ud83e\uddc0"
+        }
+    },
+    "category_icons": {
+        "\u679c\u852c": "\ud83e\udd57",
+        "\u5373\u98df": "\ud83c\udf74",
+        "\u4e73\u54c1\u996e\u6599": "\ud83e\udd5b",
+        "\u672a\u77e5": "\u2753"
+    },
+    "display_name_map": {
+        "apple": "\u82f9\u679c",
+        "banana": "\u9999\u8549",
+        "orange": "\u6a59\u5b50",
+        "broccoli": "\u897f\u5170\u82b1",
+        "carrot": "\u80e1\u841d\u535c",
+        "hot dog": "\u70ed\u72d7",
+        "donut": "\u751c\u751c\u5708",
+        "pizza": "\u62ab\u8428",
+        "cake": "\u86cb\u7cd5",
+        "sandwich": "\u4e09\u660e\u6cbb",
+        "bottle": "\u74f6\u88c5\u996e\u54c1",
+        "cup": "\u676f\u5b50",
+        "milk": "\u725b\u5976",
+        "egg": "\u9e21\u86cb",
+        "bread": "\u9762\u5305",
+        "cheese": "\u5976\u916a"
+    },
+    "package_type_map": {
+        "apple": {
+            "qty_type": "count",
+            "label": "\u4e2a"
+        },
+        "banana": {
+            "qty_type": "count",
+            "label": "\u4e2a"
+        },
+        "orange": {
+            "qty_type": "count",
+            "label": "\u4e2a"
+        },
+        "broccoli": {
+            "qty_type": "count",
+            "label": "\u68f5"
+        },
+        "carrot": {
+            "qty_type": "count",
+            "label": "\u6839"
+        },
+        "hot dog": {
+            "qty_type": "count",
+            "label": "\u6839"
+        },
+        "donut": {
+            "qty_type": "count",
+            "label": "\u4e2a"
+        },
+        "pizza": {
+            "qty_type": "count",
+            "label": "\u7247"
+        },
+        "cake": {
+            "qty_type": "count",
+            "label": "\u5757"
+        },
+        "sandwich": {
+            "qty_type": "count",
+            "label": "\u4e2a"
+        },
+        "bottle": {
+            "qty_type": "liquid_level",
+            "label": "\u74f6",
+            "approx_levels": [
+                "full",
+                "three_quarters",
+                "half",
+                "low",
+                "empty",
+                "unknown"
+            ]
+        },
+        "cup": {
+            "qty_type": "approx",
+            "label": "\u676f",
+            "approx_levels": [
+                "\u51e0\u4e4e\u6ca1\u6709",
+                "\u6709\u6c34"
+            ]
+        },
+        "milk": {
+            "qty_type": "packed",
+            "label": "\u76d2",
+            "approx_levels": [
+                "\u5de6\u4fa7\u4e0d\u8d34\u98df\u7269",
+                "\u5de6\u4fa7\u8d34\u8fd1\u98df\u7269",
+                "\u5de6\u4fa7\u98df\u7269\u8fc7\u534a",
+                "\u5de6\u4fa7\u98df\u7269\u5f88\u591a"
+            ]
+        },
+        "egg": {
+            "qty_type": "packed",
+            "label": "\u76d2",
+            "approx_levels": [
+                "\u5c11\u51e0\u4e2a",
+                "\u5269\u4e00\u534a",
+                "\u51e0\u4e4e\u6ee1"
+            ]
+        },
+        "bread": {
+            "qty_type": "approx",
+            "label": "\u888b",
+            "approx_levels": [
+                "\u5c11\u8bb8",
+                "\u534a\u888b\u4ee5\u4e0a",
+                "\u51e0\u4e4e\u6ee1"
+            ]
+        },
+        "cheese": {
+            "qty_type": "approx",
+            "label": "\u5757",
+            "approx_levels": [
+                "\u5f88\u5c11",
+                "\u534a\u5757\u4ee5\u4e0a",
+                "\u5927\u5757\u4ee5\u4e0a"
+            ]
+        }
+    }
+}

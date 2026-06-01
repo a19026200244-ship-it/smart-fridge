@@ -59,7 +59,14 @@
       "Bash(/c/Users/24139/AppData/Local/Programs/Python/Python313/python -m pip install python-docx python-pptx)",
       "Bash(/c/Users/24139/AppData/Local/Programs/Python/Python313/python c:/claude_code_demo/generate_tech_paper.py)",
       "Bash(/c/Users/24139/AppData/Local/Programs/Python/Python313/python c:/claude_code_demo/generate_business_plan.py)",
-      "Bash(/c/Users/24139/AppData/Local/Programs/Python/Python313/python c:/claude_code_demo/generate_ppt.py)"
+      "Bash(/c/Users/24139/AppData/Local/Programs/Python/Python313/python c:/claude_code_demo/generate_ppt.py)",
+      "Bash(python3 test_config.py)",
+      "Bash(python3 -c \"import json; json.load\\(open\\('config/board.json'\\)\\)\")",
+      "Bash(python3 test_regression.py)",
+      "Bash(timeout 5 python server/app.py)",
+      "Bash(python3 test/test_config.py)",
+      "Bash(python3 test/test_regression.py)",
+      "Bash(python3 test/test_event_enhanced.py)"
     ]
   }
 }
