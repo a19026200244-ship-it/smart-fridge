@@ -330,6 +330,24 @@ import sqlite3
 DB = os.path.join(PROJECT, "server/server_fridge.db")
 conn = sqlite3.connect(DB)
 
+# 测试运行前补齐旧数据库字段，保持与 server.init_db() 的迁移逻辑一致。
+def ensure_column(table, col, typ):
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+    except sqlite3.OperationalError:
+        pass
+
+for col, typ in [("category", "TEXT DEFAULT ''"),
+                 ("category_l2", "TEXT"),
+                 ("qty_type", "TEXT DEFAULT 'count'"),
+                 ("qty_estimate", "TEXT")]:
+    ensure_column("inventory", col, typ)
+for col, typ in [("review_status", "TEXT"),
+                 ("qty_type", "TEXT"),
+                 ("qty_estimate", "TEXT")]:
+    ensure_column("events", col, typ)
+conn.commit()
+
 # 模拟 confirm_event API 逻辑
 conn.execute("DELETE FROM inventory WHERE name='测试修正牛奶'")
 conn.execute("DELETE FROM events WHERE food_name='测试修正牛奶'")

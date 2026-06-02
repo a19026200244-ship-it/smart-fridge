@@ -6,209 +6,451 @@
 <title>SmartFridge Pro</title>
 <style>
 :root{
-  --bg:#060a15; --surface:#0f172a; --surface2:#1a2744;
-  --border:rgba(255,255,255,0.06); --text:#bcc8e0; --text2:#6b7d95;
-  --accent:#00e6b8; --accent2:#008cff; --warn:#ffaa32; --danger:#ff5064;
-  --radius:14px;
+  /* 新配色：暖色系 + 薄荷绿点缀 */
+  --bg:#f5f3ef; --surface:#ffffff; --surface2:#f0ede8;
+  --border:#e2ddd6; --text:#3d3830; --text2:#8a7f72;
+  --accent:#00b894; --accent2:#6c5ce7; --warn:#e17055; --danger:#d63031;
+  --radius:16px; --shadow:0 2px 12px rgba(0,0,0,0.06);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{
   font-family:'Inter',-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
   background:var(--bg); color:var(--text); min-height:100vh;
-  background-image:radial-gradient(ellipse at 20% 10%, rgba(0,230,184,0.03) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 90%, rgba(0,140,255,0.03) 0%, transparent 50%);
 }
-.app{max-width:1440px;margin:0 auto;padding:14px 20px}
+/* 顶部导航 */
 .topbar{
   display:flex;justify-content:space-between;align-items:center;
-  padding:14px 24px;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);margin-bottom:14px;flex-wrap:wrap;gap:10px;
+  padding:14px 24px;background:var(--surface);
+  border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px;
+  box-shadow:var(--shadow);position:sticky;top:0;z-index:100;
 }
 .logo{display:flex;align-items:center;gap:12px}
 .logo-icon{
-  width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  width:38px;height:38px;background:linear-gradient(135deg,var(--accent),#00cec9);
   border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;
 }
-.logo h1{font-size:19px;font-weight:700;letter-spacing:-0.4px}
+.logo h1{font-size:19px;font-weight:700;letter-spacing:-0.4px;color:var(--text)}
 .logo span{font-size:10px;color:var(--text2);font-weight:400;margin-left:4px}
 .status-row{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 .status-item{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
 .dot{width:8px;height:8px;border-radius:50%;transition:all .3s}
-.dot.green{background:var(--accent);box-shadow:0 0 10px rgba(0,230,184,0.3)}
-.dot.orange{background:var(--warn);box-shadow:0 0 10px rgba(255,170,50,0.3)}
-.dot.gray{background:#3a4a5c}
-.time-badge{font-size:10px;color:var(--text2);background:var(--surface2);padding:3px 8px;border-radius:5px}
-.main-grid{display:grid;grid-template-columns:1.2fr 0.8fr;gap:14px}
-.video-card{grid-row:span 3}
-@media(max-width:1024px){.main-grid{grid-template-columns:1fr}.video-card{grid-row:span 1}}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.dot.green{background:var(--accent);box-shadow:0 0 10px rgba(0,184,148,0.4)}
+.dot.orange{background:var(--warn);box-shadow:0 0 10px rgba(225,112,85,0.4)}
+.dot.gray{background:#ccc}
+.time-badge{font-size:10px;color:var(--text2);background:var(--surface2);padding:3px 10px;border-radius:20px}
+
+/* 主内容区 */
+.app{max-width:1440px;margin:0 auto;padding:20px}
+.tab-bar{
+  display:flex;gap:4px;background:var(--surface2);padding:5px;border-radius:12px;
+  margin-bottom:20px;width:fit-content;
+}
+.tab-btn{
+  padding:8px 22px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600;
+  background:transparent;color:var(--text2);transition:all .2s;
+}
+.tab-btn.active{background:var(--surface);color:var(--accent);box-shadow:0 1px 6px rgba(0,0,0,0.08)}
+.tab-btn:hover:not(.active){color:var(--text)}
+
+/* 视图切换 */
+.view{display:none}
+.view.active{display:block}
+
+/* 监控视图网格 */
+.monitor-grid{display:grid;grid-template-columns:1.3fr 0.7fr;gap:18px}
+@media(max-width:1024px){.monitor-grid{grid-template-columns:1fr}}
+
+/* 通用卡片 */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
 .card-head{
-  padding:12px 18px;border-bottom:1px solid var(--border);
+  padding:14px 20px;border-bottom:1px solid var(--border);
   display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;
 }
-.card-head .badge{font-size:10px;background:var(--surface2);padding:3px 9px;border-radius:12px;color:var(--text2)}
+.card-head .badge{font-size:10px;background:var(--surface2);padding:3px 10px;border-radius:20px;color:var(--text2)}
 .card-body{max-height:380px;overflow-y:auto}
 .card-body::-webkit-scrollbar{width:4px}
-.card-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.08);border-radius:2px}
-.video-wrap{position:relative;aspect-ratio:4/3;background:#000;display:flex;align-items:center;justify-content:center}
+.card-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.1);border-radius:2px}
+.video-card{grid-row:span 3}
+@media(max-width:1024px){.video-card{grid-row:span 1}}
+
+/* 视频区 */
+.video-wrap{position:relative;aspect-ratio:4/3;background:#1a1a2e;display:flex;align-items:center;justify-content:center}
 .video-wrap img{width:100%;height:100%;object-fit:contain}
-.video-overlay{position:absolute;bottom:10px;left:10px;display:flex;gap:6px}
-.video-tag{font-size:9px;padding:3px 8px;border-radius:10px;background:rgba(0,0,0,0.75);color:var(--accent)}
-.video-status{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:var(--text2)}
+.video-overlay{position:absolute;bottom:12px;left:12px;display:flex;gap:6px}
+.video-tag{font-size:9px;padding:3px 8px;border-radius:10px;background:rgba(0,0,0,0.7);color:#00b894}
+.video-status{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#888}
+
+/* 列表项 */
 .list-item{
-  display:flex;align-items:center;padding:10px 18px;gap:10px;
-  border-bottom:1px solid rgba(255,255,255,0.03);font-size:13px;
+  display:flex;align-items:center;padding:11px 20px;gap:10px;
+  border-bottom:1px solid var(--border);font-size:13px;
 }
-.list-item:hover{background:rgba(255,255,255,0.02)}
+.list-item:hover{background:rgba(0,0,0,0.015)}
 .item-icon{font-size:18px;width:28px;text-align:center;flex-shrink:0}
 .item-name{flex:1;font-weight:500}
 .item-count{padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600}
-.count-in{background:rgba(0,230,184,0.12);color:var(--accent)}
+.count-in{background:rgba(0,184,148,0.1);color:var(--accent)}
+.count-out{background:rgba(214,48,49,0.1);color:var(--danger)}
 .item-time{font-size:10px;color:var(--text2);white-space:nowrap}
 .action-put .item-icon{color:var(--accent)}
 .action-take .item-icon{color:var(--danger)}
-.action-put .item-count{background:rgba(0,230,184,0.12);color:var(--accent)}
-.action-take .item-count{background:rgba(255,80,100,0.12);color:var(--danger)}
 .item-actions{display:flex;gap:4px;margin-left:4px}
 .evt-badge{
   font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600;margin:0 3px;flex-shrink:0
 }
-.evt-badge.review{background:rgba(255,170,50,0.15);color:var(--warn)}
-.evt-badge.confirmed{background:rgba(0,230,184,0.12);color:var(--accent)}
-.evt-badge.rejected{background:rgba(255,80,100,0.12);color:var(--danger)}
+.evt-badge.review{background:rgba(225,112,85,0.12);color:var(--warn)}
+.evt-badge.confirmed{background:rgba(0,184,148,0.12);color:var(--accent)}
+.evt-badge.rejected{background:rgba(214,48,49,0.12);color:var(--danger)}
 .cat-badge{
   font-size:9px;padding:2px 6px;border-radius:8px;font-weight:500;
-  background:rgba(0,140,255,0.12);color:var(--accent2);margin:0 2px;flex-shrink:0
+  background:rgba(108,92,231,0.1);color:var(--accent2);margin:0 2px;flex-shrink:0
 }
+
+/* 按钮 */
 .btn-sm{
-  width:24px;height:24px;border-radius:6px;border:1px solid var(--border);
+  width:26px;height:26px;border-radius:7px;border:1px solid var(--border);
   background:var(--surface2);color:var(--text);cursor:pointer;
   font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;
 }
-.btn-sm:hover{background:var(--accent);color:#000;border-color:var(--accent)}
+.btn-sm:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
 .btn-sm.danger:hover{background:var(--danger);border-color:var(--danger);color:#fff}
 .edit-row{
-  display:flex;gap:6px;padding:8px 18px;align-items:center;
-  border-bottom:1px solid rgba(255,255,255,0.04);
+  display:flex;gap:6px;padding:10px 20px;align-items:center;
+  border-bottom:1px solid var(--border);
 }
 .edit-row input{
   flex:1;background:var(--surface2);border:1px solid var(--border);
-  color:var(--text);padding:6px 10px;border-radius:6px;font-size:12px;outline:none;
+  color:var(--text);padding:7px 12px;border-radius:8px;font-size:12px;outline:none;
 }
 .edit-row input:focus{border-color:var(--accent)}
 .btn{
-  padding:6px 14px;border-radius:6px;border:none;cursor:pointer;
+  padding:7px 16px;border-radius:8px;border:none;cursor:pointer;
   font-size:12px;font-weight:600;
 }
-.btn-accent{background:var(--accent);color:#000}
+.btn-accent{background:var(--accent);color:#fff}
+.btn-accent:hover{background:#00a381}
 .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
 .btn-outline:hover{border-color:var(--accent);color:var(--accent)}
 .empty{text-align:center;padding:40px 20px;color:var(--text2)}
 .empty .icon{font-size:32px;margin-bottom:8px;opacity:0.4}
-.footer{text-align:center;padding:12px;color:var(--text2);font-size:10px;letter-spacing:0.5px;margin-top:8px}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* ===== 助手视图 ===== */
+.assistant-view{
+  max-width:860px;margin:0 auto;
+  display:flex;flex-direction:column;gap:16px;
+}
+
+/* 助手信息卡 */
+.assistant-info{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px 20px;display:flex;align-items:flex-start;gap:12px;box-shadow:var(--shadow);
+}
+.assistant-avatar{
+  width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#00cec9);
+  display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;
+}
+.assistant-info-text h3{font-size:14px;font-weight:700;margin-bottom:4px}
+.assistant-info-text p{font-size:11px;color:var(--text2);line-height:1.6}
+.assistant-status{
+  display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;
+  padding:3px 10px;border-radius:20px;margin-top:6px;
+}
+.assistant-status.online{background:rgba(0,184,148,0.1);color:var(--accent)}
+.assistant-status.offline{background:rgba(225,112,85,0.1);color:var(--warn)}
+
+/* 可拖拽调整大小的聊天区包装 */
+.assistant-chat-wrap{
+  position:relative;
+  display:flex;flex-direction:column;
+  min-height:280px;  /* 最小高度 */
+  max-height:85vh;   /* 最大不超过屏幕85% */
+  resize:vertical;   /* 浏览器原生可拖拽 */
+  overflow:visible;  /* 允许超出以显示拖拽条 */
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);box-shadow:var(--shadow);
+}
+
+/* 拖拽手柄条 */
+.resize-handle{
+  height:7px;background:var(--surface2);
+  border-radius:var(--radius) var(--radius) 0 0;
+  cursor:ns-resize;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:background .15s;
+}
+.resize-handle:hover{background:var(--border)}
+.resize-handle::after{
+  content:'';width:36px;height:3px;
+  background:var(--text2);border-radius:2px;opacity:.35;
+}
+
+/* 消息区域 */
+.assistant-chat{
+  background:var(--surface);border-radius:0 0 var(--radius) var(--radius);
+  display:flex;flex-direction:column;flex:1;overflow:hidden;
+}
+.assistant-chat-head{
+  padding:14px 20px;border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;
+  flex-shrink:0;
+}
+.assistant-chat-head .badge{font-size:10px;background:var(--surface2);padding:3px 10px;border-radius:20px;color:var(--text2)}
+.assistant-messages{
+  flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px;min-height:0;
+}
+.assistant-msg{display:flex;animation:fadeIn .25s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.assistant-msg.user{justify-content:flex-end}
+.assistant-msg.bot{justify-content:flex-start}
+.assistant-bubble{
+  max-width:78%;font-size:13px;line-height:1.7;border-radius:14px;
+  padding:10px 14px;white-space:normal;word-break:break-word;
+}
+.assistant-msg.bot .assistant-bubble{
+  background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  border-bottom-left-radius:4px;
+}
+.assistant-msg.user .assistant-bubble{
+  background:linear-gradient(135deg,var(--accent),#00cec9);color:#fff;
+  border-bottom-right-radius:4px;
+}
+.assistant-meta{font-size:10px;color:var(--text2);margin-top:4px;padding:0 2px}
+
+/* 快捷问题 */
+.assistant-quick{
+  padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;
+}
+.assistant-quick .btn{padding:6px 14px;font-size:11px;border-radius:20px}
+
+/* 输入框 */
+.assistant-input-area{
+  padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;
+}
+.assistant-input-area input{
+  flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  padding:10px 14px;border-radius:24px;font-size:13px;outline:none;
+}
+.assistant-input-area input:focus{border-color:var(--accent)}
+.assistant-input-area .btn{padding:10px 20px;border-radius:24px}
+
+/* 加载状态 */
+.assistant-loading{
+  display:none;padding:10px 20px;font-size:11px;color:var(--text2);
+  text-align:center;
+}
+.assistant-loading.show{display:block}
+.typing-dots{
+  display:inline-flex;gap:3px;margin-left:4px;vertical-align:middle;
+}
+.typing-dots span{
+  width:5px;height:5px;border-radius:50%;background:var(--text2);
+  animation:typing .8s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2){animation-delay:.15s}
+.typing-dots span:nth-child(3){animation-delay:.3s}
+@keyframes typing{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
+/* ===== Markdown 渲染样式 ===== */
+.md-p{margin:0 0 6px 0;line-height:1.7}
+.md-p:last-child{margin-bottom:0}
+.md-h2{font-size:15px;font-weight:700;margin:14px 0 6px 0;color:var(--text)}
+.md-h3{font-size:13px;font-weight:700;margin:12px 0 5px 0;color:var(--text)}
+.md-h4{font-size:12px;font-weight:700;margin:10px 0 4px 0;color:var(--text2)}
+.md-ul{padding:0 0 8px 18px;margin:0;list-style:none}
+.md-ul li{position:relative;padding-left:14px;margin-bottom:4px;line-height:1.65}
+.md-ul li::before{content:'•';position:absolute;left:0;color:var(--accent)}
+.md-quote{display:inline-block;padding:2px 8px;background:rgba(0,184,148,0.08);border-left:3px solid var(--accent);border-radius:0 4px 4px 0;font-size:12px;color:var(--text2);margin:2px 0}
+.md-code-block{background:#2d2d3a;border-radius:8px;padding:10px 14px;overflow-x:auto;margin:8px 0;font-size:12px;line-height:1.5}
+.md-code-block code{color:#e0e0e0;white-space:pre}
+.md-inline-code{background:rgba(108,92,231,0.1);color:var(--accent2);padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace}
+.md-hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+
+/* 底部 */
+.footer{text-align:center;padding:16px;color:var(--text2);font-size:10px;letter-spacing:0.5px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .pulse{animation:pulse 2s ease-in-out infinite}
 </style>
 </head>
 <body>
-<div class="app">
-  <div class="topbar">
-    <div class="logo"><div class="logo-icon">❄</div><div><h1>SmartFridge<span>Pro</span></h1></div></div>
-    <div class="status-row">
-      <div class="status-item"><div class="dot gray" id="doorDot"></div><b id="doorState">--</b></div>
-      <div class="status-item"><div class="dot gray" id="lightDot"></div><b id="lightState">--</b></div>
-      <div class="status-item">🌡<b id="cpuTemp">--</b>°C</div>
-      <div class="time-badge"><span id="updateTime">--</span> <span id="liveDot" style="color:var(--accent);display:none">●</span></div>
-    </div>
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">❄</div>
+    <div><h1>SmartFridge<span>Pro</span></h1></div>
   </div>
-  <div class="main-grid">
-    <div class="card video-card">
-      <div class="card-head">📹 Live View <span class="badge" id="streamStatus">Connecting...</span></div>
-      <div class="video-wrap">
-        <img id="videoImg" src="/api/snapshot" crossorigin="anonymous">
-        <div class="video-overlay"><span class="video-tag">● LIVE</span><span class="video-tag" id="fpsBadge">SNAP</span></div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-head">📦 Inventory <span class="badge" id="invCount">0</span>
-        <button class="btn-sm" onclick="showAddForm()" title="Add Item">+</button>
-      </div>
-      <div class="card-body" id="invList"><div class="empty"><div class="icon">🛒</div><p>No items</p></div></div>
-      <div id="addForm" style="display:none" class="edit-row">
-        <input id="newItemName" placeholder="Item name..." maxlength="20">
-        <input id="newItemCount" type="number" value="1" min="1" max="99" style="width:50px">
-        <button class="btn btn-accent" onclick="addItem()">Add</button>
-        <button class="btn btn-outline" onclick="hideAddForm()">Cancel</button>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-head">📋 Activity <span class="badge" id="evtCount">0</span></div>
-      <div class="card-body" id="evtList"><div class="empty"><div class="icon">📝</div><p>No activity</p></div></div>
-    </div>
+  <div class="status-row">
+    <div class="status-item"><div class="dot gray" id="doorDot"></div><b id="doorState">--</b></div>
+    <div class="status-item"><div class="dot gray" id="lightDot"></div><b id="lightState">--</b></div>
+    <div class="status-item">🌡<b id="cpuTemp">--</b>°C</div>
+    <div class="time-badge"><span id="updateTime">--</span> <span id="liveDot" style="color:var(--accent);display:none">●</span></div>
   </div>
-  <div class="footer">SmartFridge Pro · Luckfox Pico Ultra W · <span id="connStatus" style="color:var(--text2)">● Initializing</span></div>
 </div>
+
+<div class="app">
+  <!-- 标签页切换 -->
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabMonitor" onclick="switchTab('monitor')">📹 冰箱监控</button>
+    <button class="tab-btn" id="tabAssistant" onclick="switchTab('assistant')">🥗 智能助手</button>
+  </div>
+
+  <!-- 监控视图 -->
+  <div class="view active" id="viewMonitor">
+    <div class="monitor-grid">
+      <div class="card video-card">
+        <div class="card-head">📹 实时画面 <span class="badge" id="streamStatus">连接中...</span></div>
+        <div class="video-wrap">
+          <img id="videoImg" src="/api/snapshot" crossorigin="anonymous">
+          <div class="video-overlay">
+            <span class="video-tag">● LIVE</span>
+            <span class="video-tag" id="fpsBadge">SNAP</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">📦 库存 <span class="badge" id="invCount">0 项</span>
+          <button class="btn-sm" onclick="showAddForm()" title="添加">+</button>
+        </div>
+        <div class="card-body" id="invList"><div class="empty"><div class="icon">🛒</div><p>暂无食材</p></div></div>
+        <div id="addForm" style="display:none" class="edit-row">
+          <input id="newItemName" placeholder="食材名称..." maxlength="20">
+          <input id="newItemCount" type="number" value="1" min="1" max="99" style="width:52px">
+          <button class="btn btn-accent" onclick="addItem()">添加</button>
+          <button class="btn btn-outline" onclick="hideAddForm()">取消</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">📋 活动记录 <span class="badge" id="evtCount">0 条</span></div>
+        <div class="card-body" id="evtList"><div class="empty"><div class="icon">📝</div><p>暂无活动</p></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 智能助手视图 -->
+  <div class="view" id="viewAssistant">
+    <div class="assistant-view">
+
+      <!-- 助手信息卡 -->
+      <div class="assistant-info">
+        <div class="assistant-avatar">🥗</div>
+        <div class="assistant-info-text">
+          <h3>智能饮食助手</h3>
+          <p>读取当前冰箱库存、数量和液位状态，结合健康饮食知识库为你推荐餐食。配置 DeepSeek API Key 后可启用更强的 RAG 能力。</p>
+          <div class="assistant-status online" id="assistantStatusBadge">
+            <span>●</span> <span id="assistantStatusText">本地规则引擎</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 可拖拽调整大小的聊天区 -->
+      <div class="assistant-chat-wrap" id="chatWrap">
+        <div class="resize-handle" id="resizeHandle"></div>
+        <div class="assistant-chat" style="height:100%">
+          <div class="assistant-chat-head">
+            <span>💬 对话</span>
+            <span class="badge" id="assistantSource">离线建议</span>
+          </div>
+          <div class="assistant-messages" id="assistantMessages"></div>
+          <div class="assistant-loading" id="assistantLoading">
+            助手正在分析库存<span class="typing-dots"><span></span><span></span><span></span></span>
+          </div>
+          <div class="assistant-quick">
+            <button class="btn btn-accent" onclick="askAssistant('根据当前冰箱库存，帮我推荐今天一日三餐')">一日三餐</button>
+            <button class="btn btn-outline" onclick="askAssistant('根据当前库存，推荐一个健康早餐')">健康早餐</button>
+            <button class="btn btn-outline" onclick="askAssistant('哪些食材应该优先吃掉？')">优先消耗</button>
+            <button class="btn btn-outline" onclick="askAssistant('晚餐有什么推荐？')">晚餐推荐</button>
+          </div>
+          <div class="assistant-input-area">
+            <input id="assistantInput" placeholder="描述你想要的餐食或食材情况..." maxlength="120">
+            <button class="btn btn-accent" onclick="askAssistant()">发送</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="footer">SmartFridge Pro · Luckfox Pico Ultra W · <span id="connStatus" style="color:var(--text2)">● 初始化中</span></div>
+
 <script>
 const REFRESH=1200;
 let fetchCount=0,lastFetchOk=false;
 function $(id){return document.getElementById(id)}
+
 const QTY_LABELS={
   full:'几乎满',three_quarters:'约3/4',half:'约一半',low:'少量',
   empty:'几乎空',unknown:'无法判断',needs_manual:'需人工确认',
   put_in:'有新增',take_out:'有取出'
 };
 function qtyLabel(v){return QTY_LABELS[v]||v||'--'}
+
 function qtyTypeBadge(qt){
   if(qt==='liquid_level')return '<span class="evt-badge confirmed" style="font-size:8px;padding:1px 5px">液位</span>';
   if(qt==='approx')return '<span class="evt-badge review" style="font-size:8px;padding:1px 5px">≈</span>';
   if(qt==='packed')return '<span class="evt-badge review" style="font-size:8px;padding:1px 5px">包装</span>';
   return '';
 }
+
 function eventId(e,idx){return e&&e.id!==undefined?e.id:idx}
+
+// 标签页切换
+function switchTab(tab){
+  $('tabMonitor').classList.toggle('active',tab==='monitor');
+  $('tabAssistant').classList.toggle('active',tab==='assistant');
+  $('viewMonitor').classList.toggle('active',tab==='monitor');
+  $('viewAssistant').classList.toggle('active',tab==='assistant');
+}
+
+// 数据刷新
 async function refresh(){
   fetchCount++;let ok=false;
   try{
-    const r=await fetch('/api/dashboard')
-    if(!r.ok)throw new Error('HTTP '+r.status)
-    const d=await r.json()
+    const r=await fetch('/api/dashboard');
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json();
     updateStatus(d.status);updateInventory(d.inventory);updateEvents(d.events);ok=true;
-    if(!lastFetchOk){$('connStatus').textContent='● Connected';$('connStatus').style.color='var(--accent)'}
+    if(!lastFetchOk){
+      $('connStatus').textContent='● 已连接';
+      $('connStatus').style.color='var(--accent)';
+    }
     $('liveDot').style.display='inline';
     setTimeout(function(){$('liveDot').style.display='none'},200);
   }catch(e){
-    $('connStatus').textContent='● Disconnected';$('connStatus').style.color='var(--danger)';
+    $('connStatus').textContent='● 连接断开';
+    $('connStatus').style.color='var(--danger)';
     $('liveDot').style.display='none';
   }
   lastFetchOk=ok;
 }
+
 function updateStatus(s){
-  if(!s)return
-  const door=s.door_state,light=s.light_state
-  $('doorState').textContent=door==='open'?'OPEN':'CLOSED'
-  $('lightState').textContent=light==='on'?'ON':'OFF'
-  $('cpuTemp').textContent=(s.cpu_temp||0).toFixed(0)
-  $('updateTime').textContent=(s.updated||'').slice(11,19)||'--'
-  const dd=$('doorDot'),ld=$('lightDot')
-  dd.className='dot '+(door==='open'?'orange pulse':'gray')
-  ld.className='dot '+(light==='on'?'green pulse':'gray')
-  $('streamStatus').textContent=door==='open'?'● Detecting':'○ Standby'
-  $('streamStatus').style.color=door==='open'?'var(--accent)':'var(--text2)'
+  if(!s)return;
+  const door=s.door_state,light=s.light_state;
+  $('doorState').textContent=door==='open'?'开启':'关闭';
+  $('lightState').textContent=light==='on'?'开启':'关闭';
+  $('cpuTemp').textContent=(s.cpu_temp||0).toFixed(0);
+  $('updateTime').textContent=(s.updated||'').slice(11,19)||'--';
+  const dd=$('doorDot'),ld=$('lightDot');
+  dd.className='dot '+(door==='open'?'orange pulse':'gray');
+  ld.className='dot '+(light==='on'?'green pulse':'gray');
+  $('streamStatus').textContent=door==='open'?'● 检测中':'○ 待机';
+  $('streamStatus').style.color=door==='open'?'var(--accent)':'var(--text2)';
 }
+
 function updateInventory(items){
-  const el=$('invList')
-  $('invCount').textContent=(items||[]).length+' items'
-  if(!items||!items.length){el.innerHTML='<div class="empty"><div class="icon">🛒</div><p>Empty</p></div>';return}
+  const el=$('invList');
+  $('invCount').textContent=(items||[]).length+' 项';
+  if(!items||!items.length){el.innerHTML='<div class="empty"><div class="icon">🛒</div><p>暂无食材</p></div>';return;}
   const icons={'苹果':'🍎','香蕉':'🍌','橙子':'🍊','西兰花':'🥦','胡萝卜':'🥕',
     '三明治':'🥪','披萨':'🍕','蛋糕':'🎂','瓶装饮品':'🧃','热狗':'🌭',
-    '甜甜圈':'🍩','杯子':'🥤','牛奶':'🥛','鸡蛋':'🥚','面包':'🍞','奶酪':'🧀','葡萄':'🍇','西瓜':'🍉','草莓':'🍓'};
+    '甜甜圈':'🍩','杯子':'🥤','牛奶':'🥛','鸡蛋':'🥚','面包':'🍞','奶酪':'🧀',
+    '葡萄':'🍇','西瓜':'🍉','草莓':'🍓','酸奶':'🥛','米饭':'🍚','面条':'🍜'};
   el.innerHTML=items.map((i,idx)=>{
     const icon=icons[i.name]||'📦';
     const ts=(i.last_updated||i.first_seen||'').slice(0,16);
     const qt=i.qty_type||'count';
     const qtypeBadge=qt==='approx'?'<span class="evt-badge review" style="font-size:8px;padding:1px 5px">≈</span>':
                      qt==='packed'?'<span class="evt-badge review" style="font-size:8px;padding:1px 5px">□</span>':'';
-    const qest=(i.qty_estimate&&qt!=='count')?'<span style="font-size:9px;color:var(--warn)">'+i.qty_estimate+'</span>':'';
-    const countDisplay=(qt==='count')?('x'+i.count):('<span style="color:var(--warn)">'+i.qty_estimate+'</span>');
+    const countDisplay=(qt==='count')?('x'+i.count):('<span style="color:var(--warn)">'+qtyLabel(i.qty_estimate)+'</span>');
     return '<div class="list-item">'+
       '<span class="item-icon">'+icon+'</span><span class="item-name">'+i.name+'</span>'+
       qtypeBadge+
@@ -217,42 +459,52 @@ function updateInventory(items){
       '<div class="item-actions">'+
         '<button class="btn-sm" onclick="editItem('+idx+',1)">+</button>'+
         '<button class="btn-sm" onclick="editItem('+idx+',-1)">-</button>'+
-        '<button class="btn-sm danger" onclick="deleteItem('+idx+')">x</button>'+
+        '<button class="btn-sm danger" onclick="deleteItem('+idx+')">×</button>'+
       '</div></div>';
   }).join('');
 }
+
 function updateEvents(evts){
-  const el=$('evtList')
-  $('evtCount').textContent=(evts||[]).length+' events'
-  if(!evts||!evts.length){el.innerHTML='<div class="empty"><div class="icon">📝</div><p>No activity</p></div>';return}
+  const el=$('evtList');
+  $('evtCount').textContent=(evts||[]).length+' 条';
+  if(!evts||!evts.length){el.innerHTML='<div class="empty"><div class="icon">📝</div><p>暂无活动</p></div>';return;}
   el.innerHTML=evts.map((e,idx)=>{
-    const isIn=e.action==='put_in',icon=isIn?'📥':'📤'
-    const status=e.review_status||'confirmed'
+    const isPartial=e.action==='partial_take_out';
+    const isIn=e.action==='put_in';
+    const icon=isIn?'📥':(isPartial?'🥄':'📤');
+    const status=e.review_status||'confirmed';
     const badge=(status==='needs_review')?'<span class="evt-badge review">待审核</span>':
-                 (status==='rejected')?'<span class="evt-badge rejected">已驳回</span>':
-                 (status==='confirmed')?'<span class="evt-badge confirmed">已确认</span>':''
-    const catBadge=(e.category)?
-    '<span class="cat-badge">'+e.category+'</span>':'';
-    const qt=e.qty_type||'count'
-    const qtypeIcon=(qt==='approx')?'≈':(qt==='packed')?'□':''
-    const qtypeLabel=qtypeIcon?('<span class="cat-badge" style="font-size:8px;padding:1px 4px">'+qtypeIcon+'</span>'):''
+      (status==='rejected')?'<span class="evt-badge rejected">已驳回</span>':
+      (status==='corrected')?'<span class="evt-badge confirmed">已修正</span>':
+      (status==='confirmed')?'<span class="evt-badge confirmed">已确认</span>':'';
+    const catBadge=e.category?'<span class="cat-badge">'+e.category+'</span>':'';
+    const qt=e.qty_type||'count';
+    const levelChange=(e.before_qty_estimate||e.after_qty_estimate)?
+      '<span style="font-size:9px;color:var(--warn);margin-left:2px">'+qtyLabel(e.before_qty_estimate)+' → '+qtyLabel(e.after_qty_estimate)+'</span>':'';
     const qest=(e.qty_estimate&&qt!=='count')?
-      ('<span style="font-size:9px;color:var(--warn);margin-left:2px">'+e.qty_estimate+'</span>'):''
-    const countLabel=(qt==='count')?(isIn?'+':'-')+e.count:(isIn?'+有变化':'-有变化')
+      '<span style="font-size:9px;color:var(--warn);margin-left:2px">'+qtyLabel(e.qty_estimate)+'</span>':'';
+    const countLabel=isPartial?'部分取出':((qt==='count')?(isIn?'+':'-')+e.count:(isIn?'+有变化':'-有变化'));
+    const eid=eventId(e,idx);
+    const partialFix=(status==='needs_review'&&isPartial)?
+      '<button class="btn-sm" onclick="correctPartialEvent('+eid+',\'half\')" title="修正为半瓶">½</button>'+
+      '<button class="btn-sm" onclick="correctPartialEvent('+eid+',\'low\')" title="修正为少量">L</button>'+
+      '<button class="btn-sm" onclick="correctPartialEvent('+eid+',\'empty\')" title="修正为空">0</button>':'';
     const actions=(status==='needs_review')?
-      '<button class="btn-sm" onclick="confirmEvent('+idx+')" title="确认">✓</button>'+
-      '<button class="btn-sm danger" onclick="rejectEvent('+idx+')" title="驳回">✗</button>'+
-      '<button class="btn-sm danger" onclick="deleteEvent('+idx+')" title="删除">x</button>':
-      '<button class="btn-sm danger" onclick="deleteEvent('+idx+')" title="删除">x</button>'
+      partialFix+
+      '<button class="btn-sm" onclick="confirmEvent('+eid+')" title="确认">✓</button>'+
+      '<button class="btn-sm danger" onclick="rejectEvent('+eid+')" title="驳回">×</button>'+
+      '<button class="btn-sm danger" onclick="deleteEvent('+eid+')" title="删除">×</button>':
+      '<button class="btn-sm danger" onclick="deleteEvent('+eid+')" title="删除">×</button>';
     return '<div class="list-item '+(isIn?'action-put':'action-take')+'">'+
       '<span class="item-icon">'+icon+'</span><span class="item-name">'+(e.food_name||e.name)+'</span>'+
-      qtypeLabel+
+      qtyTypeBadge(qt)+
       '<span class="item-count '+(isIn?'count-in':'count-out')+'">'+countLabel+'</span>'+
-      badge+catBadge+qest+
+      badge+catBadge+qest+levelChange+
       '<span class="item-time">'+(e.timestamp||'').slice(0,16)+'</span>'+
       '<div class="item-actions">'+actions+'</div></div>';
-  }).join('')
+  }).join('');
 }
+
 function showAddForm(){$('addForm').style.display='flex';$('newItemName').focus()}
 function hideAddForm(){$('addForm').style.display='none';$('newItemName').value=''}
 async function addItem(){
@@ -266,92 +518,12 @@ async function editItem(idx,delta){
   refresh();
 }
 async function deleteItem(idx){
-  if(!confirm('Delete this item?'))return;
+  if(!confirm('确认删除该食材？'))return;
   await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',index:idx})});
   refresh();
 }
-async function deleteEvent(idx){
-  if(!confirm('Delete this event?'))return;
-  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete_event',index:idx})});
-  refresh();
-}
-async function confirmEvent(idx){
-  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'confirm_event',index:idx})});
-  refresh();
-}
-async function rejectEvent(idx){
-  await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reject_event',index:idx})});
-  refresh();
-}
-// Partial-takeout aware renderers. They intentionally override the older
-// functions above while keeping the rest of the page unchanged.
-function updateInventory(items){
-  const el=$('invList')
-  $('invCount').textContent=(items||[]).length+' items'
-  if(!items||!items.length){el.innerHTML='<div class="empty"><div class="icon">ðŸ›’</div><p>Empty</p></div>';return}
-  const icons={'苹果':'ðŸŽ','香蕉':'ðŸŒ','橙子':'ðŸŠ','西兰花':'ðŸ¥¦','胡萝卜':'ðŸ¥•',
-    '三明治':'ðŸ¥ª','披萨':'ðŸ•','蛋糕':'ðŸŽ‚','瓶装饮品':'ðŸ§ƒ','热狗':'ðŸŒ­',
-    '甜甜圈':'ðŸ©','杯子':'ðŸ¥¤','牛奶':'ðŸ¥›','鸡蛋':'ðŸ¥š','面包':'ðŸž','奶酪':'ðŸ§€'};
-  el.innerHTML=items.map((i,idx)=>{
-    const icon=icons[i.name]||'ðŸ“¦'
-    const ts=(i.last_updated||i.first_seen||'').slice(0,16)
-    const qt=i.qty_type||'count'
-    const countDisplay=(qt==='count')?('x'+i.count):qtyLabel(i.qty_estimate)
-    const state=(qt==='count')?'':'<span style="font-size:9px;color:var(--warn);margin-left:4px">'+qtyLabel(i.qty_estimate)+'</span>'
-    return '<div class="list-item">'+
-      '<span class="item-icon">'+icon+'</span><span class="item-name">'+i.name+'</span>'+
-      qtyTypeBadge(qt)+state+
-      '<span class="item-count count-in">'+countDisplay+'</span>'+
-      '<span class="item-time">'+ts+'</span>'+
-      '<div class="item-actions">'+
-        '<button class="btn-sm" onclick="editItem('+idx+',1)">+</button>'+
-        '<button class="btn-sm" onclick="editItem('+idx+',-1)">-</button>'+
-        '<button class="btn-sm danger" onclick="deleteItem('+idx+')">x</button>'+
-      '</div></div>'
-  }).join('')
-}
-function updateEvents(evts){
-  const el=$('evtList')
-  $('evtCount').textContent=(evts||[]).length+' events'
-  if(!evts||!evts.length){el.innerHTML='<div class="empty"><div class="icon">ðŸ“</div><p>No activity</p></div>';return}
-  el.innerHTML=evts.map((e,idx)=>{
-    const isPartial=e.action==='partial_take_out'
-    const isIn=e.action==='put_in'
-    const icon=isIn?'ðŸ“¥':(isPartial?'ðŸ¥¤':'ðŸ“¤')
-    const status=e.review_status||'confirmed'
-    const badge=(status==='needs_review')?'<span class="evt-badge review">待审核</span>':
-      (status==='rejected')?'<span class="evt-badge rejected">已驳回</span>':
-      (status==='corrected')?'<span class="evt-badge confirmed">已修正</span>':
-      (status==='confirmed')?'<span class="evt-badge confirmed">已确认</span>':''
-    const catBadge=e.category?'<span class="cat-badge">'+e.category+'</span>':''
-    const qt=e.qty_type||'count'
-    const levelChange=(e.before_qty_estimate||e.after_qty_estimate)?
-      '<span style="font-size:9px;color:var(--warn);margin-left:2px">'+qtyLabel(e.before_qty_estimate)+' -> '+qtyLabel(e.after_qty_estimate)+'</span>':''
-    const qest=(e.qty_estimate&&qt!=='count')?
-      '<span style="font-size:9px;color:var(--warn);margin-left:2px">'+qtyLabel(e.qty_estimate)+'</span>':''
-    const countLabel=isPartial?'部分取出':((qt==='count')?(isIn?'+':'-')+e.count:(isIn?'+有变化':'-有变化'))
-    const eid=eventId(e,idx)
-    const partialFix=(status==='needs_review'&&isPartial)?
-      '<button class="btn-sm" onclick="correctPartialEvent('+eid+',\'half\')" title="修正为半瓶">1/2</button>'+
-      '<button class="btn-sm" onclick="correctPartialEvent('+eid+',\'low\')" title="修正为少量">L</button>'+
-      '<button class="btn-sm" onclick="correctPartialEvent('+eid+',\'empty\')" title="修正为空">0</button>':''
-    const actions=(status==='needs_review')?
-      partialFix+
-      '<button class="btn-sm" onclick="confirmEvent('+eid+')" title="确认">✓</button>'+
-      '<button class="btn-sm danger" onclick="rejectEvent('+eid+')" title="驳回">×</button>'+
-      '<button class="btn-sm danger" onclick="deleteEvent('+eid+')" title="删除">x</button>':
-      '<button class="btn-sm danger" onclick="deleteEvent('+eid+')" title="删除">x</button>'
-    return '<div class="list-item '+(isIn?'action-put':'action-take')+'">'+
-      '<span class="item-icon">'+icon+'</span><span class="item-name">'+(e.food_name||e.name)+'</span>'+
-      qtyTypeBadge(qt)+
-      '<span class="item-count '+(isIn?'count-in':'count-out')+'">'+countLabel+'</span>'+
-      badge+catBadge+qest+levelChange+
-      '<span class="item-time">'+(e.timestamp||'').slice(0,16)+'</span>'+
-      '<div class="item-actions">'+actions+'</div></div>'
-  }).join('')
-}
 async function deleteEvent(event_id){
-  if(!confirm('Delete this event?'))return;
+  if(!confirm('确认删除该记录？'))return;
   await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete_event',event_id:event_id})});
   refresh();
 }
@@ -367,12 +539,183 @@ async function correctPartialEvent(event_id,qty_estimate){
   await fetch('/api/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'correct_partial_event',event_id:event_id,qty_estimate:qty_estimate})});
   refresh();
 }
-// Video snapshot polling (more reliable than MJPEG)
+
+// ===== 智能助手 =====
+// 简易 Markdown 渲染器（支持 DeepSeek 返回的常用格式）
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+function renderMarkdown(text) {
+  if (!text) return '';
+
+  // 0. 先将 emoji 和非ASCII字符保留位置（简单保护：把 emoji 当成普通文字不过滤）
+  // 1. 代码块（先处理，防止内部内容被其他规则破坏）
+  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre class="md-code-block"><code>${code.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])}</code></pre>`);
+
+  // 2. 行内代码（先匹配长的，避免短模式先捕获）
+  text = text.replace(/`([^`\n]+)`/g, (m, code) => '<code class="md-inline-code">' + code.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]) + '</code>');
+
+  // 3. 三级标题（按顺序，防止 # 被 ## 规则先匹配）
+  text = text.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>');
+  text = text.replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>');
+  text = text.replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>');
+
+  // 5. 无序列表（支持 - 或 * 开头）
+  text = text.replace(/^[\-\*] (.+)$/gm, '<li class="md-li">$1</li>');
+  text = text.replace(/(<li class="md-li">[\s\S]*?<\/li>)\n(?=<li)/g, '$1');
+  text = text.replace(/(<li class="md-li">[\s\S]*?<\/li>)(?!\n<li)/g, '$1');
+  // 包住连续的 <li> 为 <ul>
+  text = text.replace(/((?:<li class="md-li">[\s\S]*?<\/li>\n?)+)/g, '<ul class="md-ul">$1</ul>');
+
+  // 6. 引用块
+  text = text.replace(/^&gt; (.+)$/gm, '<span class="md-quote">$1</span>');
+
+  // 7. 分割线
+  text = text.replace(/^[\-\*_]{3,}$/gm, '<hr class="md-hr">');
+
+  // 8. 粗体和斜体（组合，粗体优先）
+  text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/\*([^\*\n]+)\*/g, '<em>$1</em>');
+
+  // 9. 以双换行为界分段，将每段拆分为行后分别处理
+  //    - 以 # 开头或完全为 <li>/<pre>/<hr> 的行 → 保持原样（块级元素）
+  //    - 其余行 → 包在 <p> 中
+  const lines = text.split('\n');
+  const blocks = [];
+  let currentParaLines = [];
+
+  const flushPara = () => {
+    if (currentParaLines.length) {
+      const content = currentParaLines.join('<br>');
+      if (content.trim()) blocks.push('<p class="md-p">' + content + '</p>');
+      currentParaLines = [];
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // 跳过空行（多个空行合并为段落分隔）
+    if (!trimmed) { flushPara(); continue; }
+    // 已经是块级 HTML 标签或分割线 → 先把累积的段落写入，再保留该行
+    if (trimmed.startsWith('<')) {
+      flushPara();
+      blocks.push(trimmed);
+    } else {
+      currentParaLines.push(trimmed);
+    }
+  }
+  flushPara();
+  return blocks.join('\n');
+}
+
+let assistantHistory=[];
+const WELCOME_MSG = '你好！我是你的智能冰箱助手 👋\n\n可以直接点击下方的快捷问题，或者在输入框中描述你的需求，我会根据当前冰箱库存为你推荐一日三餐或特定餐食。';
+
+// 初始化欢迎消息
+(function initWelcome() {
+  const box = $('assistantMessages');
+  if (!box) return;
+  const row = document.createElement('div');
+  row.className = 'assistant-msg bot';
+  row.innerHTML = '<div class="assistant-bubble">' + renderMarkdown(WELCOME_MSG) + '</div>';
+  box.appendChild(row);
+})();
+
+// ===== 可拖拽调整聊天框大小 =====
+const chatWrap = $('chatWrap');
+const resizeHandle = $('resizeHandle');
+
+let isDragging = false;
+let startY = 0;
+let startHeight = 0;
+
+resizeHandle.addEventListener('mousedown', e => {
+  isDragging = true;
+  startY = e.clientY;
+  startHeight = chatWrap.offsetHeight;
+  document.body.style.cursor = 'ns-resize';
+  document.body.style.userSelect = 'none';
+});
+
+document.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const delta = startY - e.clientY;
+  const newHeight = Math.min(Math.max(startHeight + delta, 280), window.innerHeight * 0.85);
+  chatWrap.style.height = newHeight + 'px';
+});
+
+document.addEventListener('mouseup', () => {
+  if (!isDragging) return;
+  isDragging = false;
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+});
+
+// 双击handle回到默认高度
+resizeHandle.addEventListener('dblclick', () => {
+  chatWrap.style.height = '';
+});
+function addAssistantMessage(role, text, meta) {
+  const box = $('assistantMessages');
+  if (!box) return;
+  const row = document.createElement('div');
+  row.className = 'assistant-msg ' + role;
+  const source = meta && meta.source
+    ? (meta.source === 'deepseek_langchain_rag' ? 'DeepSeek RAG' : '本地规则')
+    : '';
+  const contentHtml = role === 'bot' ? renderMarkdown(text) : escapeHtml(text);
+  row.innerHTML = '<div class="assistant-bubble">' + contentHtml + (source ? '<div class="assistant-meta">来源：' + source + '</div>' : '') + '</div>';
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+function setAssistantLoading(on){
+  const el=$('assistantLoading');
+  if(el)el.classList.toggle('show',on);
+}
+async function askAssistant(message){
+  const input=$('assistantInput');
+  const finalMsg=(message||(input&&input.value)||'').trim();
+  if(!finalMsg)return;
+  if(input&&!message)input.value='';
+  addAssistantMessage('user',finalMsg);
+  setAssistantLoading(true);
+  try{
+    const r=await fetch('/api/assistant/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:finalMsg,history:assistantHistory.slice(-8)})});
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error(d.error||'assistant error');
+    addAssistantMessage('bot',d.answer||'暂时没有生成建议。',d);
+    assistantHistory.push({role:'user',content:finalMsg},{role:'assistant',content:d.answer||''});
+    if(assistantHistory.length>12)assistantHistory=assistantHistory.slice(-12);
+    // 更新来源标签
+    if($('assistantSource')){
+      const isRag=d.source==='deepseek_langchain_rag';
+      $('assistantSource').textContent=isRag?'DeepSeek RAG':'离线建议';
+      $('assistantSource').style.color=isRag?'var(--accent)':'var(--warn)';
+    }
+    // 更新状态徽章
+    if($('assistantStatusBadge')&&$('assistantStatusText')){
+      const isRag=d.source==='deepseek_langchain_rag';
+      $('assistantStatusBadge').className='assistant-status '+(isRag?'online':'offline');
+      $('assistantStatusText').textContent=isRag?'DeepSeek RAG 已连接':'本地规则引擎';
+    }
+  }catch(e){
+    addAssistantMessage('bot','助手暂时不可用，请稍后再试。错误：'+e.message);
+    if($('assistantSource')){$('assistantSource').textContent='异常';$('assistantSource').style.color='var(--danger)'}
+  }finally{setAssistantLoading(false)}
+}
+if($('assistantInput')){$('assistantInput').addEventListener('keydown',function(e){if(e.key==='Enter')askAssistant()})}
+
+// 视频快照轮询
 (function pollSnap(){
   $('videoImg').src='/api/snapshot?_='+Date.now();
   setTimeout(pollSnap,150);
 })();
-refresh();setInterval(refresh,REFRESH)
+
+refresh();
+setInterval(refresh,REFRESH);
 </script>
 </body>
 </html>

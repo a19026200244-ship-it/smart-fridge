@@ -5,3 +5,9 @@ pyngrok>=7.2,<8.0
 # Board-side Python runtime. Ignored automatically on Windows.
 Pillow>=10.0,<12.0; platform_system == "Linux"
 python-periphery>=2.4,<3.0; platform_system == "Linux"
+
+# Smart fridge assistant: RAG + DeepSeek API + LangChain
+openai>=1.0.0
+langchain-core>=0.2.0
+langchain-openai>=0.1.0
+langchain-text-splitters>=0.2.0

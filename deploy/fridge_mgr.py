@@ -29,6 +29,7 @@ from partial_qty import (
     compare_liquid_levels,
     parse_detection_details_from_file,
 )
+from event_stabilizer import FrameStabilizer, CooldownController
 
 # ── 配置加载 ──────────────────────────────────────────────────────────────
 # 支持无配置文件时使用硬编码默认值（向后兼容）
@@ -101,6 +102,14 @@ DET_FILE      = _get("paths", "det_file", default="/tmp/fridge_detections.json")
 FB_LOCK       = _get("paths", "fb_lock", default="/tmp/fb_lock")                            # LCD互斥锁文件，防止AI覆盖UI
 SERVER_URL    = _get("sync", "server_url", default="http://192.168.2.73:5000")             # Flask服务端同步地址
 SYNC_INTERVAL = _get("sync", "interval_seconds", default=2)                                # 状态同步间隔（秒）
+
+# ── 多帧稳定 + 门关后冷却期配置 ─────────────────────────────────────────
+# 解决赛题明确点出的两个真实事件识别问题：
+#   1) 单帧误检/手部晃过被识别为物品进出
+#   2) 门关瞬间手还在、物品没放稳导致的误判
+STAB_FRAMES        = _get("stabilization", "stability_frames",      default=3)   # 物品需连续 K 帧被检出才采纳
+COOLDOWN_SECONDS   = _get("stabilization", "cooldown_seconds",     default=3.0) # 门关后冷却期秒数
+COOLDOWN_STABLE_FRAMES = _get("stabilization", "cooldown_stable_frames", default=3) # 冷却期内画面连续 N 帧一致即提前结束
 
 # 打印配置加载状态（便于调试部署问题）
 _config_loaded = bool(_cfg)
@@ -420,14 +429,30 @@ def main():
     # 关闭板端默认显示服务，释放 framebuffer
     os.system("/oem/usr/bin/RkLunch-stop.sh 2>/dev/null"); time.sleep(0.5)
 
-    door_was_open, light_on = False, False  # door_was_open: 边沿检测, light_on: 灯状态
-    baseline = {}                            # 开门时记录的检测结果 {"苹果": 3, "香蕉": 2}
+    # 状态机: IDLE (门关) / DETECTING (门开) / COOLING (门关后冷却)
+    # COOLING 阶段: 门关后不立刻判定，等冷却期结束或画面稳定
+    #              期间若门重新打开则取消本轮，回到 DETECTING
+    state = "IDLE"
+    door_was_open, light_on = False, False   # 边沿检测 + 灯状态(保留用于兼容)
+    baseline = {}                            # 多帧稳定后的开门画面 {"苹果": 3, "香蕉": 2}
     baseline_details = []                    # 开门时检测详情，用于液位/部分取出判断
-    last_sync, last_ui = 0, 0               # 时间戳记录，用于控制同步/LCD刷新频率
+    after, after_details = {}, []            # 多帧稳定后的关门画面
+    last_sync, last_ui = 0, 0                # 时间戳记录，用于控制同步/LCD刷新频率
+
+    # 多帧稳定器：复用于 baseline 和 after 累积
+    stab = FrameStabilizer(stability_frames=STAB_FRAMES)
+
+    # 冷却期控制器：门关后等画面稳定或冷却期满
+    cooldown = CooldownController(
+        cooldown_seconds=COOLDOWN_SECONDS,
+        stable_frames_required=COOLDOWN_STABLE_FRAMES,
+        door_is_open_callback=lambda: not door.read(),     # True=门开
+        take_snapshot_callback=lambda: build_count_map(parse_detection_details()),
+    )
 
     # 初始: 门关, 显示 UI, 无 AI
     draw_lcd(data, TOUCH_DEV)
-    print("[Main] IDLE (door closed, AI off)\n")
+    print("[Main] IDLE (door closed, AI off, multi-frame + cooldown ready)\n")
 
     while running:
         try:
@@ -436,48 +461,97 @@ def main():
             print("[Warn] GPIO error"); time.sleep(5); continue
 
         # ── 触屏 (仅 IDLE 模式处理) ────────────────────────────────────────
-        if not door_open and TOUCH_DEV:
+        if state == "IDLE" and not door_open and TOUCH_DEV:
             if handle_touch_events(data, TOUCH_DEV):
                 save_data(data); draw_lcd(data, TOUCH_DEV)
 
-        # ── 边沿检测: 门从关变为开 ──────────────────────────────────────────
-        if door_open and not door_was_open:
+        # ── 状态转换 1: IDLE → DETECTING (门从关变为开) ─────────────────────
+        if door_open and state == "IDLE":
             print("\n>>> Door OPENED! AI starting...")
-            door_was_open = True                # 防止重复触发
-            relay.write(True); light_on = True   # 开灯（补光供AI识别）
-            ai_start()                          # 启动 fridge_ai 子进程
-            baseline_details = parse_detection_details()
-            baseline = build_count_map(baseline_details)  # 记录开门时各食材检测计数
-            print(f"[Baseline] {len(baseline)} items")
-            time.sleep(0.1)                      # 等待AI稳定（避免第一帧检测不稳定）
+            state = "DETECTING"
+            door_was_open = True
+            relay.write(True); light_on = True
+            ai_start()
+            stab.reset()
+            baseline, baseline_details = {}, []
 
-        # ── 门开着: DETECTING 状态 ──────────────────────────────────────────
-        if door_open:
-            # 更新状态（同步给Web页面）
+        # ── DETECTING: 多帧稳定累积 baseline ───────────────────────────────
+        if state == "DETECTING":
+            # 每帧用 FrameStabilizer 累积稳定的检测结果
+            dets = parse_detection_details()
+            current = stab.update(dets)
+            baseline = current
+            baseline_details = dets
             data["status"].update({"door_state":"open","light_state":"on","cpu_temp":cpu_temp()})
             save_data(data)
             if time.time() - last_sync >= SYNC_INTERVAL:
-                http_sync(data); last_sync = time.time()  # 每N秒同步一次
+                http_sync(data); last_sync = time.time()
+            time.sleep(0.2)
+
+            # 边沿: DETECTING → COOLING (门刚关)
+            if not door_open:
+                print(">>> Door CLOSED! Entering cooldown...")
+                state = "COOLING"
+                door_was_open = False
+                relay.write(False); light_on = False
+                ai_stop()                                # 立即停 AI，节省功耗
+                # 暂存最后一帧的稳定 baseline
+                baseline = stab.snapshot()
+                # 进入冷却期
+                cooldown.on_door_close()
+                after, after_details = {}, []
+                print(f"[Cooldown] start, baseline_stable={baseline}")
+            continue
+
+        # ── COOLING: 多帧稳定累积 after + 监控门重开 ─────────────────────
+        if state == "COOLING":
+            # 冷却期内门重新打开 → 取消本轮 after, 回到 DETECTING
+            if door_open:
+                print("[Cooldown] door REOPENED, cancel this round")
+                state = "DETECTING"
+                door_was_open = True
+                relay.write(True); light_on = True
+                ai_start()
+                stab.reset()
+                after, after_details = {}, []
+                time.sleep(0.1)
+                continue
+
+            # 冷却期内持续读帧累积稳定的 after
+            dets = parse_detection_details()
+            current = stab.update(dets)
+            after = current
+            after_details = dets
+
+            # tick 一下: 监控画面稳定度 / 冷却期是否已到
+            cooldown.tick()
+            if cooldown.is_ready():
+                # 冷却完成,触发 process_events
+                print(f"[Cooldown] READY after {cooldown.elapsed:.1f}s, "
+                      f"baseline={baseline} after={after}")
+                process_events(data, baseline, after, baseline_details, after_details)
+                save_data(data)
+                draw_lcd(data, TOUCH_DEV)
+                http_sync(data); last_sync = time.time()
+                baseline, after = {}, {}
+                baseline_details, after_details = [], []
+                stab.reset()
+                cooldown.reset()
+                state = "IDLE"
+                print("[Main] IDLE\n")
+            elif cooldown.is_canceled():
+                # 这里其实到不了(被上面 door_open 提前捕获),但保留
+                print("[Cooldown] canceled, back to IDLE")
+                baseline, after = {}, {}
+                baseline_details, after_details = [], []
+                stab.reset()
+                cooldown.reset()
+                state = "IDLE"
             time.sleep(0.2)
             continue
 
-        # ── 边沿检测: 门从开变为关 → PROCESSING ────────────────────────────
-        if not door_open and door_was_open:
-            print(">>> Door CLOSED! Processing...")
-            door_was_open = False
-            relay.write(False); light_on = False  # 关灯
-            after_details = parse_detection_details()
-            after = build_count_map(after_details) # 记录关门时各食材检测计数
-            ai_stop()                              # 停止AI节省功耗
-            print(f"[Result] Before:{len(baseline)} After:{len(after)}")
-            process_events(data, baseline, after, baseline_details, after_details)
-            save_data(data)
-            draw_lcd(data, TOUCH_DEV)              # 刷新LCD显示
-            http_sync(data); last_sync = time.time()
-            print("[Main] IDLE\n")
-
         # ── IDLE: 门关着 ────────────────────────────────────────────────────
-        if not door_open:
+        if state == "IDLE" and not door_open:
             data["status"].update({"door_state":"closed","light_state":"off","cpu_temp":cpu_temp()})
             save_data(data)
             # LCD每1.5秒刷新（避免过于频繁导致闪烁）

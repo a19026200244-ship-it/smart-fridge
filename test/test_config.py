@@ -233,6 +233,42 @@ def _():
 
     return ok, "非法JSON被捕获，程序继续运行" if ok else "非法JSON未被正确处理"
 
+@test("服务端-嵌套配置生效", "验证 server.json 中 video/server 嵌套字段被 app.py 实际读取")
+def _():
+    with open("config/server.json") as f:
+        orig = json.load(f)
+
+    modified = json.loads(json.dumps(orig))
+    modified.setdefault("server", {})["host"] = "127.9.9.9"
+    modified.setdefault("server", {})["port"] = 9876
+    modified.setdefault("video", {})["rtsp_url"] = "rtsp://example.local/live/0"
+    modified.setdefault("video", {})["ffmpeg_path"] = "/bin/false"
+
+    try:
+        with open("config/server.json", "w") as f:
+            json.dump(modified, f, indent=4)
+
+        code = (
+            "import server.app as app; "
+            "print('CFG_RESULT:%s|%s|%s|%s' % "
+            "(app.SERVER_HOST, app.SERVER_PORT, app.RTSP_URL, app._ffmpeg_exe))"
+        )
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=PROJECT,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    finally:
+        with open("config/server.json", "w") as f:
+            json.dump(orig, f, indent=4)
+
+    expected = "CFG_RESULT:127.9.9.9|9876|rtsp://example.local/live/0|/bin/false"
+    ok = proc.returncode == 0 and expected in (proc.stdout + proc.stderr)
+    detail = expected if ok else f"return={proc.returncode}, out={(proc.stdout + proc.stderr)[-500:]}"
+    return ok, detail
+
 # ══════════════════════════════════════════════════
 # 额外验证: _sg / _get 工具函数正确性
 # ══════════════════════════════════════════════════

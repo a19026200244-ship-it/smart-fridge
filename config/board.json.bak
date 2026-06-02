@@ -76,20 +76,22 @@
             "\u4e09\u660e\u6cbb",
             "\u62ab\u8428",
             "\u86cb\u7cd5",
-            "\u74f6\u88c5\u996e\u54c1",
-            "\u70ed\u72d7",
             "\u751c\u751c\u5708",
-            "\u676f\u5b50",
-            "\u725b\u5976",
-            "\u9e21\u86cb",
-            "\u9762\u5305",
-            "\u5976\u916a"
+            "\u70ed\u72d7",
+            "\u74f6\u5b50",
+            "\u676f\u5b50"
         ]
     },
     "event": {
-        "auto_confirm_threshold": 2,
-        "needs_review_threshold": 1,
-        "enable_review": true
+        "auto_confirm_threshold": 1,
+        "needs_review_threshold": 0,
+        "enable_review": false
+    },
+    "stabilization": {
+        "stability_frames": 3,
+        "cooldown_seconds": 3.0,
+        "cooldown_stable_frames": 3,
+        "_comment": "\u591a\u5e27\u7a33\u5b9a + \u95e8\u5173\u540e\u51b7\u5374\u671f\u3002stability_frames: \u7269\u54c1\u9700\u8fde\u7eed K \u5e27\u88ab\u68c0\u51fa\u624d\u8fdb\u5165\u7a33\u5b9a\u96c6\u5408; cooldown_seconds: \u95e8\u5173\u540e\u51b7\u5374\u671f\u79d2\u6570; cooldown_stable_frames: \u51b7\u5374\u671f\u5185\u753b\u9762\u8fde\u7eed N \u5e27\u5b8c\u5168\u4e00\u81f4\u5373\u63d0\u524d\u7ed3\u675f"
     },
     "liquid_level": {
         "enabled": true,
@@ -119,7 +121,19 @@
                 "name": "empty",
                 "min_ratio": 0.0
             }
-        ]
+        ],
+        "image_detection": {
+            "enabled": true,
+            "roi_x_margin": 0.18,
+            "roi_top_margin": 0.08,
+            "roi_bottom_margin": 0.05,
+            "min_width": 12,
+            "min_height": 24,
+            "smooth_window": 5,
+            "min_contrast": 18.0,
+            "threshold_ratio": 0.45,
+            "min_bottom_fill": 0.55
+        }
     },
     "category_map": {
         "apple": {
@@ -147,15 +161,10 @@
             "c2": "\u852c\u83dc",
             "icon": "\ud83e\udd55"
         },
-        "hot dog": {
+        "sandwich": {
             "c1": "\u5373\u98df",
-            "c2": "\u719f\u98df",
-            "icon": "\ud83c\udf2d"
-        },
-        "donut": {
-            "c1": "\u5373\u98df",
-            "c2": "\u751c\u70b9",
-            "icon": "\ud83c\udf69"
+            "c2": "\u5207\u7247",
+            "icon": "\ud83e\udd6a"
         },
         "pizza": {
             "c1": "\u5373\u98df",
@@ -165,48 +174,33 @@
         "cake": {
             "c1": "\u5373\u98df",
             "c2": "\u751c\u70b9",
-            "icon": "\ud83c\udf82"
+            "icon": "\ud83c\udf70"
         },
-        "sandwich": {
+        "donut": {
             "c1": "\u5373\u98df",
-            "c2": "\u5207\u7247",
-            "icon": "\ud83e\udd6a"
+            "c2": "\u751c\u70b9",
+            "icon": "\ud83c\udf69"
+        },
+        "hot dog": {
+            "c1": "\u5373\u98df",
+            "c2": "\u719f\u98df",
+            "icon": "\ud83c\udf2d"
         },
         "bottle": {
-            "c1": "\u4e73\u54c1\u996e\u6599",
-            "c2": "\u5305\u88c5\u996e\u54c1",
+            "c1": "\u996e\u54c1",
+            "c2": "\u4efb\u610f\u74f6\u5b50",
             "icon": "\ud83e\uddc3"
         },
         "cup": {
-            "c1": "\u4e73\u54c1\u996e\u6599",
+            "c1": "\u996e\u54c1",
             "c2": "\u5bb9\u5668",
             "icon": "\ud83e\udd64"
-        },
-        "milk": {
-            "c1": "\u4e73\u54c1\u996e\u6599",
-            "c2": "\u4e73\u5236\u54c1",
-            "icon": "\ud83e\udd5b"
-        },
-        "egg": {
-            "c1": "\u4e73\u54c1\u996e\u6599",
-            "c2": "\u86cb\u5236\u54c1",
-            "icon": "\ud83e\udd5a"
-        },
-        "bread": {
-            "c1": "\u4e73\u54c1\u996e\u6599",
-            "c2": "\u70d8\u7119",
-            "icon": "\ud83c\udf5e"
-        },
-        "cheese": {
-            "c1": "\u4e73\u54c1\u996e\u6599",
-            "c2": "\u4e73\u5236\u54c1",
-            "icon": "\ud83e\uddc0"
         }
     },
     "category_icons": {
-        "\u679c\u852c": "\ud83e\udd57",
-        "\u5373\u98df": "\ud83c\udf74",
-        "\u4e73\u54c1\u996e\u6599": "\ud83e\udd5b",
+        "\u679c\u852c": "\ud83e\uddca",
+        "\u5373\u98df": "\ud83c\udf71",
+        "\u996e\u54c1": "\ud83e\uddc3",
         "\u672a\u77e5": "\u2753"
     },
     "display_name_map": {
@@ -215,17 +209,13 @@
         "orange": "\u6a59\u5b50",
         "broccoli": "\u897f\u5170\u82b1",
         "carrot": "\u80e1\u841d\u535c",
-        "hot dog": "\u70ed\u72d7",
-        "donut": "\u751c\u751c\u5708",
+        "sandwich": "\u4e09\u660e\u6cbb",
         "pizza": "\u62ab\u8428",
         "cake": "\u86cb\u7cd5",
-        "sandwich": "\u4e09\u660e\u6cbb",
-        "bottle": "\u74f6\u88c5\u996e\u54c1",
-        "cup": "\u676f\u5b50",
-        "milk": "\u725b\u5976",
-        "egg": "\u9e21\u86cb",
-        "bread": "\u9762\u5305",
-        "cheese": "\u5976\u916a"
+        "donut": "\u751c\u751c\u5708",
+        "hot dog": "\u70ed\u72d7",
+        "bottle": "\u74f6\u5b50",
+        "cup": "\u676f\u5b50"
     },
     "package_type_map": {
         "apple": {
@@ -248,11 +238,7 @@
             "qty_type": "count",
             "label": "\u6839"
         },
-        "hot dog": {
-            "qty_type": "count",
-            "label": "\u6839"
-        },
-        "donut": {
+        "sandwich": {
             "qty_type": "count",
             "label": "\u4e2a"
         },
@@ -264,9 +250,13 @@
             "qty_type": "count",
             "label": "\u5757"
         },
-        "sandwich": {
+        "donut": {
             "qty_type": "count",
             "label": "\u4e2a"
+        },
+        "hot dog": {
+            "qty_type": "count",
+            "label": "\u6839"
         },
         "bottle": {
             "qty_type": "liquid_level",
@@ -284,45 +274,8 @@
             "qty_type": "approx",
             "label": "\u676f",
             "approx_levels": [
-                "\u51e0\u4e4e\u6ca1\u6709",
+                "\u7a7a",
                 "\u6709\u6c34"
-            ]
-        },
-        "milk": {
-            "qty_type": "packed",
-            "label": "\u76d2",
-            "approx_levels": [
-                "\u5de6\u4fa7\u4e0d\u8d34\u98df\u7269",
-                "\u5de6\u4fa7\u8d34\u8fd1\u98df\u7269",
-                "\u5de6\u4fa7\u98df\u7269\u8fc7\u534a",
-                "\u5de6\u4fa7\u98df\u7269\u5f88\u591a"
-            ]
-        },
-        "egg": {
-            "qty_type": "packed",
-            "label": "\u76d2",
-            "approx_levels": [
-                "\u5c11\u51e0\u4e2a",
-                "\u5269\u4e00\u534a",
-                "\u51e0\u4e4e\u6ee1"
-            ]
-        },
-        "bread": {
-            "qty_type": "approx",
-            "label": "\u888b",
-            "approx_levels": [
-                "\u5c11\u8bb8",
-                "\u534a\u888b\u4ee5\u4e0a",
-                "\u51e0\u4e4e\u6ee1"
-            ]
-        },
-        "cheese": {
-            "qty_type": "approx",
-            "label": "\u5757",
-            "approx_levels": [
-                "\u5f88\u5c11",
-                "\u534a\u5757\u4ee5\u4e0a",
-                "\u5927\u5757\u4ee5\u4e0a"
             ]
         }
     }

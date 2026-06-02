@@ -21,6 +21,7 @@ from deploy.partial_qty import (  # noqa: E402
     LEVEL_ORDER,
     build_count_map,
     compare_liquid_levels,
+    detail_level,
     parse_detection_details_from_file,
 )
 
@@ -40,6 +41,24 @@ def write_det_file(payload):
     with os.fdopen(fd, "w") as f:
         json.dump(payload, f)
     return path
+
+
+def write_bottle_frame(level_ratio, size=(160, 240), bbox=(40, 20, 120, 220)):
+    from PIL import Image, ImageDraw
+
+    fd, path = tempfile.mkstemp(prefix="smartfridge_bottle_", suffix=".png")
+    os.close(fd)
+    img = Image.new("RGB", size, (245, 245, 245))
+    draw = ImageDraw.Draw(img)
+    x1, y1, x2, y2 = bbox
+    inner = (x1 + 10, y1 + 14, x2 - 10, y2 - 10)
+    draw.rounded_rectangle((x1, y1, x2, y2), radius=16, outline=(130, 130, 130), width=3, fill=(250, 250, 250))
+    liquid_top = inner[3] - int((inner[3] - inner[1]) * level_ratio)
+    draw.rectangle((inner[0], liquid_top, inner[2], inner[3]), fill=(35, 120, 210))
+    draw.line((inner[0], liquid_top, inner[2], liquid_top), fill=(20, 80, 150), width=2)
+    draw.rounded_rectangle((x1, y1, x2, y2), radius=16, outline=(110, 110, 110), width=3)
+    img.save(path)
+    return path, list(bbox)
 
 
 def test_parse_detection_details_keeps_bbox_frame_and_level():
@@ -75,6 +94,42 @@ def test_build_count_map_matches_existing_parse_detections_behavior():
         {"name": "person"},
     ]
     assert_equal(build_count_map(details), {"bottle": 2, "apple": 1}, "count map")
+
+
+def test_detail_level_estimates_level_from_image_bbox():
+    frame_path, bbox = write_bottle_frame(0.46)
+    try:
+        result = detail_level({"name": "bottle", "confidence": 0.92, "frame_path": frame_path, "bbox": bbox})
+    finally:
+        os.remove(frame_path)
+
+    assert_equal(result["level"], "half", "image level")
+    assert_true(result["confidence"] >= 0.65, "image confidence")
+    assert_true("图像估算" in result["reason"], "image reason")
+
+
+def test_compare_liquid_levels_uses_image_bbox_when_no_level_field():
+    before_path, before_bbox = write_bottle_frame(0.86)
+    after_path, after_bbox = write_bottle_frame(0.46)
+    try:
+        before = [{"name": "bottle", "confidence": 0.93, "frame_path": before_path, "bbox": before_bbox}]
+        after = [{"name": "bottle", "confidence": 0.91, "frame_path": after_path, "bbox": after_bbox}]
+        package_map = {"bottle": {"qty_type": "liquid_level"}}
+        display_map = {"bottle": "瓶装饮品"}
+        category_map = {"bottle": {"c1": "乳品饮品", "c2": "包装饮品"}}
+
+        events = compare_liquid_levels(before, after, package_map, display_map, category_map)
+    finally:
+        os.remove(before_path)
+        os.remove(after_path)
+
+    assert_equal(len(events), 1, "event count")
+    event = events[0]
+    assert_equal(event["action"], "partial_take_out", "action")
+    assert_equal(event["review_status"], "confirmed", "review_status")
+    assert_equal(event["before_qty_estimate"], "full", "before image level")
+    assert_equal(event["after_qty_estimate"], "half", "after image level")
+    assert_true("0." in event["reason"], "reason includes ratios")
 
 
 def test_compare_liquid_levels_generates_partial_take_out():
@@ -227,6 +282,8 @@ if __name__ == "__main__":
     tests = [
         test_parse_detection_details_keeps_bbox_frame_and_level,
         test_build_count_map_matches_existing_parse_detections_behavior,
+        test_detail_level_estimates_level_from_image_bbox,
+        test_compare_liquid_levels_uses_image_bbox_when_no_level_field,
         test_compare_liquid_levels_generates_partial_take_out,
         test_compare_liquid_levels_missing_after_level_needs_review,
         test_level_order_only_allows_downward_auto_confirmation,

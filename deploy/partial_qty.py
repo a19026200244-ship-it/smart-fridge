@@ -89,6 +89,195 @@ def ratio_to_level(ratio, levels=None):
     return "unknown"
 
 
+def _as_float(value, default=0.0):
+    """将值尽可能转换为浮点数，用于图像启发式算法。"""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _image_detection_config(liquid_config):
+    """返回嵌套的图像检测配置，同时保留安全的默认值。"""
+    cfg = (liquid_config or {}).get("image_detection") or {}
+    return {
+        "enabled": cfg.get("enabled", True),
+        "roi_x_margin": _as_float(cfg.get("roi_x_margin"), 0.18),
+        "roi_top_margin": _as_float(cfg.get("roi_top_margin"), 0.08),
+        "roi_bottom_margin": _as_float(cfg.get("roi_bottom_margin"), 0.05),
+        "min_width": int(_as_float(cfg.get("min_width"), 12)),
+        "min_height": int(_as_float(cfg.get("min_height"), 24)),
+        "smooth_window": max(1, int(_as_float(cfg.get("smooth_window"), 5))),
+        "min_contrast": _as_float(cfg.get("min_contrast"), 18.0),
+        "threshold_ratio": _as_float(cfg.get("threshold_ratio"), 0.45),
+        "min_bottom_fill": _as_float(cfg.get("min_bottom_fill"), 0.55),
+    }
+
+
+def _clip_bbox(bbox, image_width, image_height, min_width=12, min_height=24):
+    """将绝对坐标或0-1相对坐标的边界框规范化为裁剪后的整数像素值。"""
+    if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+        return None
+    try:
+        x1, y1, x2, y2 = [float(v) for v in bbox]
+    except (TypeError, ValueError):
+        return None
+
+    if max(abs(x1), abs(y1), abs(x2), abs(y2)) <= 1.5:
+        x1, x2 = x1 * image_width, x2 * image_width
+        y1, y2 = y1 * image_height, y2 * image_height
+
+    x1, x2 = sorted((x1, x2))
+    y1, y2 = sorted((y1, y2))
+    x1 = max(0, min(image_width - 1, int(round(x1))))
+    x2 = max(0, min(image_width, int(round(x2))))
+    y1 = max(0, min(image_height - 1, int(round(y1))))
+    y2 = max(0, min(image_height, int(round(y2))))
+
+    if x2 - x1 < min_width or y2 - y1 < min_height:
+        return None
+    return (x1, y1, x2, y2)
+
+
+def _smooth_rows(values, window):
+    """对水平行得分进行滑动平均平滑，减少噪点。"""
+    if window <= 1 or len(values) <= 1:
+        return list(values)
+    radius = window // 2
+    smoothed = []
+    for idx in range(len(values)):
+        start = max(0, idx - radius)
+        end = min(len(values), idx + radius + 1)
+        smoothed.append(sum(values[start:end]) / (end - start))
+    return smoothed
+
+
+def _percentile(sorted_values, ratio):
+    """返回排序后数组中指定比例位置的近似值。"""
+    if not sorted_values:
+        return 0.0
+    idx = int(round((len(sorted_values) - 1) * ratio))
+    return sorted_values[max(0, min(len(sorted_values) - 1, idx))]
+
+
+def estimate_liquid_level_from_image(detail, liquid_config=None):
+    """
+    从图像帧路径和边界框中估算透明瓶装液体的液位。
+
+    这是一个用于竞赛/演示场景的轻量级启发式算法：
+    1. 裁剪检测到的瓶子区域，去除边缘/瓶盖部分
+    2. 对每行水平像素计算饱和度和暗度得分
+    3. 定位底部连接液体的顶部位置
+
+    低对比度或图像缺失时会返回 unknown，由人工审核流程处理。
+
+    Args:
+        detail: 包含 frame_path 和 bbox 的检测详情字典
+        liquid_config: 可选的液位配置，用于覆盖默认检测参数
+
+    Returns:
+        dict: 包含 level（液位等级）、confidence（置信度）、ratio（液位比例）和 reason（说明）的字典
+    """
+    cfg = _image_detection_config(liquid_config)
+    if not cfg["enabled"]:
+        return {"level": "unknown", "confidence": 0.0, "reason": "图像液位识别未启用"}
+
+    frame_path = detail.get("frame_path") if detail else None
+    bbox = detail.get("bbox") if detail else None
+    if not frame_path:
+        return {"level": "unknown", "confidence": 0.0, "reason": "缺少 frame_path，无法判断液位"}
+    if not bbox:
+        return {"level": "unknown", "confidence": 0.0, "reason": "缺少 bbox，无法判断液位"}
+
+    try:
+        from PIL import Image
+        with Image.open(frame_path) as img:
+            img = img.convert("RGB")
+            box = _clip_bbox(bbox, img.width, img.height, cfg["min_width"], cfg["min_height"])
+            if box is None:
+                return {"level": "unknown", "confidence": 0.0, "reason": "bbox 太小或越界，无法判断液位"}
+            roi = img.crop(box)
+    except Exception as exc:
+        return {"level": "unknown", "confidence": 0.0, "reason": f"读取图像失败: {exc}"}
+
+    width, height = roi.size
+    x_margin = int(width * cfg["roi_x_margin"])
+    top_margin = int(height * cfg["roi_top_margin"])
+    bottom_margin = int(height * cfg["roi_bottom_margin"])
+    if width - 2 * x_margin < cfg["min_width"]:
+        x_margin = max(0, (width - cfg["min_width"]) // 2)
+    if height - top_margin - bottom_margin < cfg["min_height"]:
+        top_margin = 0
+        bottom_margin = 0
+
+    roi = roi.crop((x_margin, top_margin, width - x_margin, height - bottom_margin))
+    width, height = roi.size
+    if width < cfg["min_width"] or height < cfg["min_height"]:
+        return {"level": "unknown", "confidence": 0.0, "reason": "有效 ROI 太小，无法判断液位"}
+
+    px = roi.load()
+    row_scores = []
+    for y in range(height):
+        total = 0.0
+        for x in range(width):
+            r, g, b = px[x, y]
+            mx = max(r, g, b)
+            mn = min(r, g, b)
+            gray = (r + g + b) / 3.0
+            saturation = mx - mn
+            darkness = max(0.0, 235.0 - gray)
+            total += saturation * 0.75 + darkness * 0.25
+        row_scores.append(total / width)
+
+    row_scores = _smooth_rows(row_scores, cfg["smooth_window"])
+    sorted_scores = sorted(row_scores)
+    low_score = _percentile(sorted_scores, 0.10)
+    high_score = _percentile(sorted_scores, 0.90)
+    contrast = high_score - low_score
+    if contrast < cfg["min_contrast"]:
+        return {
+            "level": "unknown",
+            "confidence": 0.0,
+            "reason": f"液位图像对比度不足({contrast:.1f})，需要人工确认",
+        }
+
+    threshold = low_score + contrast * cfg["threshold_ratio"]
+    mask = [score >= threshold for score in row_scores]
+    top_liquid = None
+    bottom_fill = 0.0
+    for y in range(height):
+        below = mask[y:]
+        fill = sum(1 for item in below if item) / len(below)
+        if row_scores[y] >= threshold and fill >= cfg["min_bottom_fill"]:
+            top_liquid = y
+            bottom_fill = fill
+            break
+
+    if top_liquid is None:
+        high_rows = [idx for idx, value in enumerate(mask) if value]
+        if not high_rows:
+            return {"level": "unknown", "confidence": 0.0, "reason": "未找到液位边界，需要人工确认"}
+        top_liquid = high_rows[0]
+        bottom_fill = sum(1 for item in mask[top_liquid:] if item) / len(mask[top_liquid:])
+
+    ratio = max(0.0, min(1.0, (height - top_liquid) / float(height)))
+    levels = (liquid_config or {}).get("levels") if liquid_config else None
+    level = ratio_to_level(ratio, levels)
+    image_conf = 0.45 + min(contrast / max(cfg["min_contrast"] * 3.0, 1.0), 1.0) * 0.40
+    image_conf *= 0.85 + min(max(bottom_fill, 0.0), 1.0) * 0.15
+    det_conf = _as_float(detail.get("confidence"), 1.0)
+    if det_conf <= 0:
+        det_conf = 1.0
+    confidence = min(det_conf, image_conf, 0.95)
+
+    return {
+        "level": level,
+        "confidence": round(confidence, 3),
+        "ratio": round(ratio, 3),
+        "reason": f"图像估算液位比例 {ratio:.2f}，等级 {level}，对比度 {contrast:.1f}",
+    }
+
+
 def parse_detection_details_from_file(det_file):
     """
     从冰箱 AI 检测结果 JSON 文件中读取检测详情。
@@ -176,9 +365,8 @@ def detail_level(detail, liquid_config=None):
     """
     从单条检测详情中提取液位等级信息。
 
-    液位来源优先级：qty_estimate > level > ratio。
-    如果检测详情中缺少液位字段（仅有 bbox/frame_path），返回 "unknown"——
-    此时需要后续图像处理补充实现。
+    液位来源优先级：qty_estimate > level > ratio > frame_path+bbox 图像估计。
+    如果图像信息不足或对比度过低，返回 unknown 并交给人工确认。
 
     Args:
         detail: 单条检测详情字典，可能包含 qty_estimate/level/ratio/confidence/bbox/frame_path
@@ -197,37 +385,37 @@ def detail_level(detail, liquid_config=None):
             "reason": "缺少检测详情，无法判断液位",
         }
 
-    # 按优先级从检测详情中提取液位
+    source = None
+    level = "unknown"
+    ratio = None
     if detail.get("qty_estimate") is not None:
+        source = "qty_estimate"
         level = normalize_level(detail.get("qty_estimate"))
     elif detail.get("level") is not None:
+        source = "level"
         level = normalize_level(detail.get("level"))
     elif detail.get("ratio") is not None:
-        # ratio 方式需要配合液位配置转换（使用自定义 levels 或默认）
+        source = "ratio"
+        ratio = _as_float(detail.get("ratio"), None)
         levels = (liquid_config or {}).get("levels") if liquid_config else None
-        level = ratio_to_level(detail.get("ratio"), levels)
-    else:
-        level = "unknown"
+        level = ratio_to_level(ratio, levels)
 
-    # 确保 confidence 为有效浮点数
-    conf = detail.get("confidence")
-    try:
-        conf = float(conf) if conf is not None else 0.0
-    except (TypeError, ValueError):
-        conf = 0.0
+    conf = _as_float(detail.get("confidence"), 0.0)
+    if level in LEVEL_ORDER:
+        result = {"level": level, "confidence": conf, "reason": f"检测字段 {source} 给出液位状态 {level}"}
+        if ratio is not None:
+            result["ratio"] = round(ratio, 3)
+        return result
 
-    # 当液位无法判断时，提供详细原因（帮助人工复核）
-    if level == "unknown":
-        if not detail.get("frame_path"):
-            reason = "缺少 frame_path，无法判断液位"
-        elif not detail.get("bbox"):
-            reason = "缺少 bbox，无法判断液位"
-        else:
-            reason = "无法判断液位，需要人工确认"
-        return {"level": "unknown", "confidence": conf, "reason": reason}
+    image_result = estimate_liquid_level_from_image(detail, liquid_config)
+    if image_result.get("level") in LEVEL_ORDER:
+        return image_result
 
-    return {"level": level, "confidence": conf, "reason": f"检测到液位状态 {level}"}
-
+    return {
+        "level": "unknown",
+        "confidence": max(conf, image_result.get("confidence", 0.0)),
+        "reason": image_result.get("reason") or "无法判断液位，需要人工确认",
+    }
 
 def select_best_detail(details, name):
     """
@@ -360,6 +548,8 @@ def compare_liquid_levels(
                 # 液位明显下降且置信度足够 → 确认的部分取出
                 review_status = "confirmed"
                 reason = f"液位从 {before_level} 下降到 {after_level}"
+                if before.get("ratio") is not None and after.get("ratio") is not None:
+                    reason += f"（{before.get('ratio'):.2f} -> {after.get('ratio'):.2f}）"
             elif delta > 0:
                 # 液位下降但置信度或幅度不足 → 待复核
                 reason = f"液位从 {before_level} 下降到 {after_level}，但置信度不足"
@@ -370,7 +560,7 @@ def compare_liquid_levels(
                 # delta == 0，液位无变化 → 不生成事件
                 continue
         else:
-            reason = "无法判断液位，需要人工确认"
+            reason = f"{before.get('reason', '变化前液位未知')}；{after.get('reason', '变化后液位未知')}"
 
         events.append({
             "action": "partial_take_out",

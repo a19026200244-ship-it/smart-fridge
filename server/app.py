@@ -3,6 +3,11 @@ import json, os, sqlite3, subprocess, time, threading, shutil
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response
 
+try:
+    from fridge_assistant import answer_fridge_question
+except ImportError:
+    from server.fridge_assistant import answer_fridge_question
+
 # ── 配置文件加载 (支持向后兼容，无配置文件时使用硬编码默认值) ──
 _CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config/server.json")
 _srv_cfg = {}
@@ -12,6 +17,8 @@ try:
 except Exception:
     pass
 
+_MISSING = object()
+
 def _sg(*keys, default):
     v = _srv_cfg
     for k in keys:
@@ -19,12 +26,21 @@ def _sg(*keys, default):
         else: return default
     return v if v is not None else default
 
-app = Flask(__name__)
-DB = os.path.join(os.path.dirname(__file__), _sg("database", "path", default="server_fridge.db"))
-RTSP_URL = _sg("rtsp_url", default="rtsp://192.168.2.77/live/0")
+def _sg_any(*paths, default):
+    """Read the first available config path, keeping compatibility with old flat keys."""
+    for path in paths:
+        value = _sg(*path, default=_MISSING)
+        if value is not _MISSING:
+            return value
+    return default
 
-SERVER_HOST = _sg("host", default="0.0.0.0")
-SERVER_PORT = _sg("port", default=5000)
+app = Flask(__name__)
+_db_path = _sg_any(("database", "path"), ("database_path",), ("db_path",), default="server_fridge.db")
+DB = _db_path if os.path.isabs(_db_path) else os.path.join(os.path.dirname(__file__), _db_path)
+RTSP_URL = _sg_any(("video", "rtsp_url"), ("rtsp_url",), default="rtsp://192.168.2.77/live/0")
+
+SERVER_HOST = _sg_any(("server", "host"), ("host",), default="0.0.0.0")
+SERVER_PORT = int(_sg_any(("server", "port"), ("port",), default=5000))
 
 # 打印配置加载状态
 _srv_cfg_loaded = bool(_srv_cfg)
@@ -35,7 +51,7 @@ else:
     print(f"[Config] No config file found ({_CONFIG_PATH}), using defaults")
 
 # ffmpeg 路径: 配置优先，否则自动探测
-_ffmpeg_exe = _sg("ffmpeg_path", default="")
+_ffmpeg_exe = _sg_any(("video", "ffmpeg_path"), ("ffmpeg_path",), default="")
 if not _ffmpeg_exe:
     for _candidate in [
         "ffmpeg",
@@ -74,19 +90,23 @@ def init_db():
             updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         db.execute("INSERT OR IGNORE INTO status(id) VALUES(1)")
         # 迁移旧表结构（向后兼容，已有的表不会自动加列）
+        def ensure_column(table, col, typ):
+            try:
+                db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+            except sqlite3.OperationalError:
+                pass
+
         for col, typ in [("review_status","TEXT"),("confidence","REAL"),
                           ("category","TEXT"),("category_l2","TEXT"),("item_key","TEXT"),
                           ("qty_type","TEXT"),("qty_estimate","TEXT"),
                           ("before_qty_estimate","TEXT"),("after_qty_estimate","TEXT"),
                           ("reason","TEXT")]:
-            try: db.execute(f"ALTER TABLE events ADD COLUMN {col} {typ}")
-            except: pass
-        try: db.execute("ALTER TABLE inventory ADD COLUMN category_l2 TEXT")
-        except: pass
-        try: db.execute("ALTER TABLE inventory ADD COLUMN qty_type TEXT DEFAULT 'count'")
-        except: pass
-        try: db.execute("ALTER TABLE inventory ADD COLUMN qty_estimate TEXT")
-        except: pass
+            ensure_column("events", col, typ)
+        for col, typ in [("category", "TEXT DEFAULT ''"),
+                          ("category_l2", "TEXT"),
+                          ("qty_type", "TEXT DEFAULT 'count'"),
+                          ("qty_estimate", "TEXT")]:
+            ensure_column("inventory", col, typ)
 init_db()
 
 # ===== MJPEG 视频流 =====
@@ -197,9 +217,20 @@ def edit():
                             )
                         else:
                             delta = e["count"] if e["action"] == "put_in" else -e["count"]
-                            db.execute("UPDATE inventory SET count=count+?, last_updated=CURRENT_TIMESTAMP WHERE name=?",
-                                (delta, e["food_name"]))
-                            db.execute("DELETE FROM inventory WHERE name=? AND count<=0", (e["food_name"],))
+                            if e["action"] == "put_in":
+                                cur = db.execute(
+                                    "UPDATE inventory SET count=count+?, qty_type=COALESCE(NULLIF(?, ''), qty_type), qty_estimate=COALESCE(NULLIF(?, ''), qty_estimate), last_updated=CURRENT_TIMESTAMP WHERE name=?",
+                                    (delta, e.get("qty_type") or "", e.get("qty_estimate") or "", e["food_name"])
+                                )
+                                if cur.rowcount == 0:
+                                    db.execute(
+                                        "INSERT INTO inventory(name,count,qty_type,qty_estimate,first_seen,last_updated) VALUES(?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
+                                        (e["food_name"], e["count"], e.get("qty_type") or "count", e.get("qty_estimate") or None)
+                                    )
+                            else:
+                                db.execute("UPDATE inventory SET count=count+?, last_updated=CURRENT_TIMESTAMP WHERE name=?",
+                                    (delta, e["food_name"]))
+                                db.execute("DELETE FROM inventory WHERE name=? AND count<=0", (e["food_name"],))
                         db.execute("UPDATE events SET review_status='confirmed' WHERE id=?", (e["id"],))
             elif action == "reject_event":
                 # 驳回待审核事件 → 标记为 rejected，不改库存
@@ -279,6 +310,21 @@ def sync():
                 db.execute("UPDATE status SET door_state=?,light_state=?,cpu_temp=?,updated=CURRENT_TIMESTAMP WHERE id=1",
                     (hw.get("door_state","closed"), hw.get("light_state","off"), hw.get("cpu_temp",0.0)))
         return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/assistant/chat", methods=["POST"])
+def assistant_chat():
+    """根据当前库存调用智能冰箱助手，支持 DeepSeek/LangChain/RAG 与本地回退。"""
+    try:
+        data = request.get_json(silent=True) or {}
+        message = str(data.get("message") or "").strip()
+        history = data.get("history") if isinstance(data.get("history"), list) else []
+        with get_db() as db:
+            inventory = [dict(r) for r in db.execute("SELECT * FROM inventory ORDER BY last_updated DESC").fetchall()]
+        result = answer_fridge_question(inventory, message, history)
+        return jsonify(result)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
