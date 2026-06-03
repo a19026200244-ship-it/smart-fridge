@@ -1,5 +1,5 @@
 """SmartFridge Server · 冰箱食材识别系统"""
-import json, os, sqlite3, subprocess, time, threading, shutil, base64, binascii
+import json, os, sqlite3, subprocess, time, threading, shutil
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response
 
@@ -38,9 +38,6 @@ app = Flask(__name__)
 _db_path = _sg_any(("database", "path"), ("database_path",), ("db_path",), default="server_fridge.db")
 DB = _db_path if os.path.isabs(_db_path) else os.path.join(os.path.dirname(__file__), _db_path)
 RTSP_URL = _sg_any(("video", "rtsp_url"), ("rtsp_url",), default="rtsp://192.168.2.77/live/0")
-SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "static", "snapshots")
-SNAPSHOT_META = os.path.join(SNAPSHOT_DIR, "capture_meta.json")
-os.makedirs(SNAPSHOT_DIR, exist_ok=True)
 
 SERVER_HOST = _sg_any(("server", "host"), ("host",), default="0.0.0.0")
 SERVER_PORT = int(_sg_any(("server", "port"), ("port",), default=5000))
@@ -158,46 +155,13 @@ threading.Thread(target=start_ffmpeg, daemon=True).start()
 def index():
     return render_template("index.html")
 
-def _load_capture_meta():
-    try:
-        with open(SNAPSHOT_META, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-def _save_capture_meta(meta):
-    tmp = SNAPSHOT_META + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, SNAPSHOT_META)
-
-def _capture_url(kind):
-    filename = "door_open.jpg" if kind == "open" else "door_close.jpg"
-    path = os.path.join(SNAPSHOT_DIR, filename)
-    if not os.path.exists(path):
-        return ""
-    return f"/static/snapshots/{filename}?v={int(os.path.getmtime(path))}"
-
-def _capture_payload():
-    meta = _load_capture_meta()
-    payload = {}
-    for kind in ("open", "close"):
-        info = meta.get(kind, {}) if isinstance(meta.get(kind), dict) else {}
-        payload[kind] = {
-            "url": _capture_url(kind),
-            "timestamp": info.get("timestamp", ""),
-            "uploaded_at": info.get("uploaded_at", ""),
-        }
-    return payload
-
 @app.route("/api/dashboard")
 def dashboard():
     with get_db() as db:
         inv = [dict(r) for r in db.execute("SELECT * FROM inventory ORDER BY last_updated DESC").fetchall()]
         evt = [dict(r) for r in db.execute("SELECT * FROM events ORDER BY id DESC LIMIT 30").fetchall()]
         st = dict(db.execute("SELECT * FROM status WHERE id=1").fetchone())
-    return jsonify({"inventory": inv, "events": list(reversed(evt)), "status": st, "captures": _capture_payload()})
+    return jsonify({"inventory": inv, "events": list(reversed(evt)), "status": st})
 
 @app.route("/api/edit", methods=["POST"])
 def edit():
@@ -316,151 +280,39 @@ def edit():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
-def _as_int(value, default=1):
-    """Safely parse counts coming from the edge snapshot."""
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-def _normalize_inventory_snapshot(items):
-    """
-    Normalize the edge inventory snapshot before replacing cloud rows.
-
-    The edge should send one row per food, but this merge makes /api/sync
-    idempotent even if a buggy edge payload contains duplicate names.
-    """
-    merged, order = {}, []
-    for item in items or []:
-        if not isinstance(item, dict):
-            continue
-        name = str(item.get("name", "")).strip()
-        if not name:
-            continue
-        count = _as_int(item.get("count", 1), 1)
-        if name not in merged:
-            merged[name] = {
-                "name": name,
-                "category": item.get("category", ""),
-                "count": count,
-                "first_seen": item.get("first_seen", datetime.now()),
-                "last_updated": item.get("last_updated", datetime.now()),
-                "category_l2": item.get("category_l2", ""),
-                "qty_type": item.get("qty_type", "count"),
-                "qty_estimate": item.get("qty_estimate", ""),
-            }
-            order.append(name)
-            continue
-
-        current = merged[name]
-        current["count"] += count
-        if item.get("last_updated"):
-            current["last_updated"] = item.get("last_updated")
-        for key in ("category", "category_l2", "qty_type", "qty_estimate"):
-            if not current.get(key) and item.get(key):
-                current[key] = item.get(key)
-
-    return [merged[name] for name in order if _as_int(merged[name].get("count"), 0) > 0]
-
-def _replace_cloud_snapshot(db, data):
-    """
-    Replace cloud database tables with the latest full edge snapshot.
-
-    This endpoint treats the edge as the source of truth. It does not append
-    detected items to the existing cloud inventory, because every sync payload
-    already represents the edge's current complete inventory state.
-    """
-    inventory = _normalize_inventory_snapshot(data.get("inventory", []))
-    events = data.get("events", []) or []
-
-    db.execute("DELETE FROM inventory")
-    db.execute("DELETE FROM events")
-    try:
-        db.execute("DELETE FROM sqlite_sequence WHERE name IN ('inventory','events')")
-    except sqlite3.OperationalError:
-        pass
-
-    for item in inventory:
-        db.execute(
-            "INSERT INTO inventory(name,category,count,first_seen,last_updated,category_l2,qty_type,qty_estimate) VALUES(?,?,?,?,?,?,?,?)",
-            (item.get("name",""), item.get("category",""), item.get("count",1),
-             item.get("first_seen",datetime.now()), item.get("last_updated",datetime.now()),
-             item.get("category_l2",""), item.get("qty_type","count"), item.get("qty_estimate","")))
-
-    inserted_events = 0
-    for idx, e in enumerate(events, start=1):
-        if not isinstance(e, dict):
-            continue
-        db.execute(
-            "INSERT OR REPLACE INTO events(id,timestamp,action,food_name,count,review_status,confidence,category,category_l2,item_key,qty_type,qty_estimate,before_qty_estimate,after_qty_estimate,reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (e.get("id") or idx, e.get("timestamp",datetime.now()), e.get("action",""),
-             e.get("food_name",""), e.get("count",1),
-             e.get("review_status"), e.get("confidence"),
-             e.get("category",""), e.get("category_l2",""), e.get("item_key",""),
-             e.get("qty_type",""), e.get("qty_estimate",""),
-             e.get("before_qty_estimate",""), e.get("after_qty_estimate",""),
-             e.get("reason","")))
-        inserted_events += 1
-
-    hw = data.get("hardware_status") or data.get("status") or {}
-    if hw:
-        db.execute("UPDATE status SET door_state=?,light_state=?,cpu_temp=?,updated=CURRENT_TIMESTAMP WHERE id=1",
-            (hw.get("door_state","closed"), hw.get("light_state","off"), hw.get("cpu_temp",0.0)))
-
-    return len(inventory), inserted_events
-
 @app.route("/api/sync", methods=["POST"])
 def sync():
     try:
-        data = request.get_json(silent=True) or {}
-        if not isinstance(data, dict):
-            return jsonify({"ok": False, "error": "invalid sync payload"}), 400
+        data = request.get_json()
         with get_db() as db:
-            inv_count, event_count = _replace_cloud_snapshot(db, data)
-        return jsonify({"ok": True, "mode": "replace", "inventory_count": inv_count, "event_count": event_count})
+            if "inventory" in data:
+                db.execute("DELETE FROM inventory")
+                for item in data["inventory"]:
+                    db.execute(
+                        "INSERT INTO inventory(name,category,count,first_seen,last_updated,category_l2,qty_type,qty_estimate) VALUES(?,?,?,?,?,?,?,?)",
+                        (item.get("name",""), item.get("category",""), item.get("count",1),
+                         item.get("first_seen",datetime.now()), item.get("last_updated",datetime.now()),
+                         item.get("category_l2",""), item.get("qty_type","count"), item.get("qty_estimate","")))
+            if "events" in data:
+                db.execute("DELETE FROM events")
+                for e in data["events"]:
+                    db.execute(
+                        "INSERT INTO events(id,timestamp,action,food_name,count,review_status,confidence,category,category_l2,item_key,qty_type,qty_estimate,before_qty_estimate,after_qty_estimate,reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (e.get("id",0), e.get("timestamp",datetime.now()), e.get("action",""),
+                         e.get("food_name",""), e.get("count",1),
+                         e.get("review_status"), e.get("confidence"),
+                         e.get("category",""), e.get("category_l2",""), e.get("item_key",""),
+                         e.get("qty_type",""), e.get("qty_estimate",""),
+                         e.get("before_qty_estimate",""), e.get("after_qty_estimate",""),
+                         e.get("reason","")))
+            hw = data.get("hardware_status") or data.get("status") or {}
+            if hw:
+                db.execute("UPDATE status SET door_state=?,light_state=?,cpu_temp=?,updated=CURRENT_TIMESTAMP WHERE id=1",
+                    (hw.get("door_state","closed"), hw.get("light_state","off"), hw.get("cpu_temp",0.0)))
+        return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
-
-@app.route("/api/capture/upload", methods=["POST"])
-def capture_upload():
-    """接收端侧上传的开门/关门快照并保存到 static/snapshots。"""
-    try:
-        data = request.get_json(silent=True) or {}
-        kind_alias = {
-            "open": "open", "door_open": "open", "before": "open",
-            "close": "close", "door_close": "close", "after": "close",
-        }
-        kind = kind_alias.get(str(data.get("kind", "")).strip())
-        if kind not in ("open", "close"):
-            return jsonify({"ok": False, "error": "invalid capture kind"}), 400
-        image_b64 = data.get("image_base64") or ""
-        if not image_b64:
-            return jsonify({"ok": False, "error": "missing image_base64"}), 400
-        try:
-            image = base64.b64decode(image_b64, validate=True)
-        except (binascii.Error, ValueError):
-            return jsonify({"ok": False, "error": "invalid base64 image"}), 400
-        if len(image) < 16:
-            return jsonify({"ok": False, "error": "image too small"}), 400
-
-        filename = "door_open.jpg" if kind == "open" else "door_close.jpg"
-        target = os.path.join(SNAPSHOT_DIR, filename)
-        tmp = target + ".tmp"
-        os.makedirs(SNAPSHOT_DIR, exist_ok=True)
-        with open(tmp, "wb") as f:
-            f.write(image)
-        os.replace(tmp, target)
-
-        meta = _load_capture_meta()
-        meta[kind] = {
-            "timestamp": data.get("timestamp") or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        _save_capture_meta(meta)
-        return jsonify({"ok": True, "kind": kind, "url": _capture_url(kind)})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/api/assistant/chat", methods=["POST"])
 def assistant_chat():
